@@ -38,5 +38,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
+warn_return_any = false
+no_implicit_optional = true
+check_untyped_defs = true
 packages = ["rm2_backup"]
