@@ -17,8 +17,7 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 10
     env:
-      RM2_HOST: rm2
-      RM2_USER: root
+      RM2_SSH_TARGET: rm2
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
     steps:
       - name: Check out repository
