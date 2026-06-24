@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily reMarkable 2 PDF backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=15min
+Unit=rm2-backup.service
+
+[Install]
+WantedBy=timers.target

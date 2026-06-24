@@ -6,9 +6,11 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
-from rm2_backup.config import ConfigError, PlanConfig, load_plan_config
+from rm2_backup.config import ConfigError, PlanConfig, load_app_config, load_plan_config
 from rm2_backup.metadata import MetadataParseError, scan_metadata_directory
+from rm2_backup.raw_sync import format_sync_plan, plan_raw_sync
 from rm2_backup.render_queue import RenderPlanItem, plan_pdf_outputs
+from rm2_backup.runner import run_local
 from rm2_backup.tree import TreeBuildError, build_visible_tree
 
 
@@ -22,6 +24,19 @@ def main(argv: Sequence[str] | None = None) -> None:
         config = _config_from_args(args)
         plan = _build_plan(config)
         _print_plan(plan)
+        return
+    if args.command == "sync-plan":
+        app_config = _load_app_config_or_exit(args.config)
+        print(format_sync_plan(plan_raw_sync(app_config)))
+        return
+    if args.command == "run-local":
+        app_config = _load_app_config_or_exit(args.config)
+        result = run_local(app_config)
+        print(
+            "planned={0.planned} completed={0.completed} skipped={0.skipped} failed={0.failed}".format(
+                result
+            )
+        )
         return
 
     parser.print_help()
@@ -38,16 +53,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "plan",
         help="dry-run local metadata parsing and PDF output path planning",
     )
-    plan_parser.add_argument(
-        "--config",
-        type=Path,
-        help="TOML config file with [plan].metadata_dir",
+    plan_parser.add_argument("--config", type=Path, help="TOML config with [plan].metadata_dir")
+    plan_parser.add_argument("--metadata-dir", type=Path, help="local *.metadata directory")
+
+    sync_plan_parser = subparsers.add_parser(
+        "sync-plan",
+        help="print planned read-only raw sync commands",
     )
-    plan_parser.add_argument(
-        "--metadata-dir",
-        type=Path,
-        help="local directory containing synthetic or copied *.metadata files",
+    sync_plan_parser.add_argument("--config", type=Path, required=True)
+
+    run_local_parser = subparsers.add_parser(
+        "run-local",
+        help="run local raw metadata planning and placeholder rendering",
     )
+    run_local_parser.add_argument("--config", type=Path, required=True)
     return parser
 
 
@@ -62,6 +81,13 @@ def _config_from_args(args: argparse.Namespace) -> PlanConfig:
     if args.metadata_dir is not None:
         return PlanConfig(metadata_dir=args.metadata_dir)
     raise SystemExit("plan requires --config or --metadata-dir")
+
+
+def _load_app_config_or_exit(path: Path):
+    try:
+        return load_app_config(path)
+    except ConfigError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def _build_plan(config: PlanConfig) -> tuple[RenderPlanItem, ...]:

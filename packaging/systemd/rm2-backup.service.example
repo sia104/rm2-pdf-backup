@@ -1,0 +1,14 @@
+[Unit]
+Description=reMarkable 2 PDF backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+Group=pi
+WorkingDirectory=/opt/rm2-pdf-backup
+Environment=PATH=/opt/rm2-pdf-backup/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/opt/rm2-pdf-backup/.venv/bin/rm2-backup run-local --config /etc/rm2-backup/config.toml
+Nice=5
+IOSchedulingClass=best-effort

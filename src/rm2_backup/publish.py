@@ -1,15 +1,21 @@
-"""Plan PDF mirror publication paths without writing files."""
+"""Atomic PDF publication helpers."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+import shutil
 
 from rm2_backup.tree import VisibleNode
+from rm2_backup.validate import PdfValidationResult, validate_pdf
 
 
 class PublishPlanError(ValueError):
     """Raised when PDF mirror path planning cannot continue safely."""
+
+
+class PublishError(RuntimeError):
+    """Raised when a validated PDF cannot be published safely."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,12 +27,17 @@ class PdfMirrorPlan:
     relative_pdf_path: PurePosixPath
 
 
-def plan_pdf_mirror_paths(tree: dict[str, VisibleNode]) -> tuple[PdfMirrorPlan, ...]:
-    """Plan relative PDF paths for visible documents.
+@dataclass(frozen=True, slots=True)
+class PublishResult:
+    """Result of publishing one PDF."""
 
-    This function is deliberately read-only: it does not create directories,
-    write PDFs, remove files, or inspect the filesystem.
-    """
+    uuid: str
+    destination: Path
+    validation: PdfValidationResult
+
+
+def plan_pdf_mirror_paths(tree: dict[str, VisibleNode]) -> tuple[PdfMirrorPlan, ...]:
+    """Plan relative PDF paths for visible documents."""
 
     plans: list[PdfMirrorPlan] = []
     used_paths: dict[PurePosixPath, str] = {}
@@ -52,6 +63,27 @@ def plan_pdf_mirror_paths(tree: dict[str, VisibleNode]) -> tuple[PdfMirrorPlan, 
         )
 
     return tuple(plans)
+
+
+def publish_validated_pdf(
+    *,
+    uuid: str,
+    staged_pdf: Path,
+    pdf_root: Path,
+    relative_pdf_path: PurePosixPath,
+) -> PublishResult:
+    """Validate and atomically publish a staged PDF into the mirror root."""
+
+    validation = validate_pdf(staged_pdf)
+    if not validation.ok:
+        raise PublishError(f"Refusing to publish invalid PDF for {uuid}: {validation.reason}")
+
+    destination = pdf_root.joinpath(*relative_pdf_path.parts)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temp_destination = destination.with_name(f".{destination.name}.tmp")
+    shutil.copy2(staged_pdf, temp_destination)
+    temp_destination.replace(destination)
+    return PublishResult(uuid=uuid, destination=destination, validation=validation)
 
 
 def _pdf_path_for_node(node: VisibleNode) -> PurePosixPath:
