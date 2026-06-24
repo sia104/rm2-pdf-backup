@@ -46,18 +46,18 @@ jobs:
           rmc "$sample_rm" -o "$sample_pdf"
           rmc -t svg -o "$sample_svg" "$sample_rm"
           python - <<'PY'
-from pathlib import Path
-from rm2_backup.validate import validate_pdf
-root = Path('/home/k11-user/rm2-backup-dev/reports/renderer-probe')
-pdf = root / 'rmc-first-page.pdf'
-svg = root / 'rmc-first-page.svg'
-validation = validate_pdf(pdf)
-print(f'pdf_exists={pdf.exists()}')
-print(f'pdf_size_bytes={pdf.stat().st_size if pdf.exists() else 0}')
-print(f'pdf_validation={validation.reason}')
-print(f'svg_exists={svg.exists()}')
-print(f'svg_size_bytes={svg.stat().st_size if svg.exists() else 0}')
-if not validation.ok:
-    raise SystemExit(1)
-PY
+          from pathlib import Path
+          from rm2_backup.validate import validate_pdf
+          root = Path('/home/k11-user/rm2-backup-dev/reports/renderer-probe')
+          pdf = root / 'rmc-first-page.pdf'
+          svg = root / 'rmc-first-page.svg'
+          validation = validate_pdf(pdf)
+          print(f'pdf_exists={pdf.exists()}')
+          print(f'pdf_size_bytes={pdf.stat().st_size if pdf.exists() else 0}')
+          print(f'pdf_validation={validation.reason}')
+          print(f'svg_exists={svg.exists()}')
+          print(f'svg_size_bytes={svg.stat().st_size if svg.exists() else 0}')
+          if not validation.ok:
+              raise SystemExit(1)
+          PY
           echo "Renderer probe outputs stored locally on RPI: $reports"
