@@ -1,0 +1,73 @@
+name: RPI dev raw backup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  raw-backup:
+    name: Spare RM2 raw sync and metadata plan
+    runs-on: self-hosted
+    timeout-minutes: 20
+    env:
+      RM2_SSH_TARGET: rm2
+      DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install local package
+        run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Guard device identity
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$DEV_BACKUP_ROOT/state"
+          identity_tmp="$(mktemp)"
+          {
+            echo "target=$RM2_SSH_TARGET"
+            ssh -o BatchMode=yes -o ConnectTimeout=10 "$RM2_SSH_TARGET" "hostname 2>/dev/null || true"
+            ssh -o BatchMode=yes -o ConnectTimeout=10 "$RM2_SSH_TARGET" "cat /etc/machine-id 2>/dev/null || true"
+          } > "$identity_tmp"
+          identity_file="$DEV_BACKUP_ROOT/state/test-rm2-identity.txt"
+          if [ -f "$identity_file" ]; then
+            cmp -s "$identity_file" "$identity_tmp" || {
+              echo "Refusing to mix a different RM2 into this dev backup root." >&2
+              exit 1
+            }
+            echo "Device identity guard passed."
+          else
+            cp "$identity_tmp" "$identity_file"
+            echo "Recorded test RM2 identity."
+          fi
+
+      - name: Read-only raw sync
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$DEV_BACKUP_ROOT/raw/current/xochitl" "$DEV_BACKUP_ROOT/raw/current/templates"
+          rsync -a --checksum --partial --safe-links \
+            -e "ssh -o BatchMode=yes -o ConnectTimeout=10" \
+            "$RM2_SSH_TARGET:/home/root/.local/share/remarkable/xochitl/" \
+            "$DEV_BACKUP_ROOT/raw/current/xochitl/"
+          rsync -a --checksum --partial --safe-links \
+            -e "ssh -o BatchMode=yes -o ConnectTimeout=10" \
+            "$RM2_SSH_TARGET:/usr/share/remarkable/templates/" \
+            "$DEV_BACKUP_ROOT/raw/current/templates/"
+          echo "metadata_files=$(find "$DEV_BACKUP_ROOT/raw/current/xochitl" -maxdepth 1 -type f -name '*.metadata' | wc -l)"
+          echo "content_files=$(find "$DEV_BACKUP_ROOT/raw/current/xochitl" -maxdepth 1 -type f -name '*.content' | wc -l)"
+          echo "rm_page_files=$(find "$DEV_BACKUP_ROOT/raw/current/xochitl" -type f -name '*.rm' | wc -l)"
+          echo "template_files=$(find "$DEV_BACKUP_ROOT/raw/current/templates" -maxdepth 1 -type f | wc -l)"
+
+      - name: Build local metadata plan
+        run: |
+          set -Eeuo pipefail
+          . .venv/bin/activate
+          mkdir -p "$DEV_BACKUP_ROOT/reports"
+          report="$DEV_BACKUP_ROOT/reports/dev-planned-pdf-outputs.txt"
+          rm2-backup plan --metadata-dir "$DEV_BACKUP_ROOT/raw/current/xochitl" > "$report"
+          planned_count=$(grep -cv '^Planned PDF outputs:' "$report" || true)
+          echo "planned_pdf_outputs=$planned_count"
+          echo "Detailed metadata plan stored locally on RPI: $report"
