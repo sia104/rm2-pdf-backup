@@ -1,0 +1,16 @@
+name: RPi runner test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-rpi:
+    runs-on: [self-hosted, rpi, rm2, dev]
+
+    steps:
+      - name: Show runner info
+        run: |
+          hostname
+          uname -a
+          whoami
+          pwd
