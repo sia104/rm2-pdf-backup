@@ -15,9 +15,10 @@ def test_plan_pdf_outputs_includes_documents_only() -> None:
         "doc-duplicate-name",
         "doc-in-folder",
         "doc-root",
-        "unknown-type",
     }
-    assert "folder-root" not in {item.uuid for item in plan}
+    planned_uuids = {item.uuid for item in plan}
+    assert "folder-root" not in planned_uuids
+    assert "unknown-type" not in planned_uuids
 
 
 def test_plan_pdf_outputs_preserves_visible_paths() -> None:
