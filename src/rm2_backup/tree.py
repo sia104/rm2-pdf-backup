@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
-import re
 
 from rm2_backup.metadata import MetadataKind, MetadataRecord
 
@@ -45,7 +45,9 @@ def build_visible_tree(records: tuple[MetadataRecord, ...]) -> dict[str, Visible
     parents and parent cycles are reported explicitly.
     """
 
-    active_records = tuple(record for record in records if not record.is_deleted_or_trashed)
+    active_records = tuple(
+        record for record in records if not record.is_deleted_or_trashed
+    )
     by_uuid = _records_by_uuid(active_records)
     child_name_counts = _child_name_counts(active_records)
     resolved: dict[str, VisibleNode] = {}
@@ -126,7 +128,9 @@ def _records_by_uuid(records: tuple[MetadataRecord, ...]) -> dict[str, MetadataR
 
 
 def _child_name_counts(records: tuple[MetadataRecord, ...]) -> Counter[tuple[str, str]]:
-    return Counter((record.parent, sanitise_path_segment(record.visible_name)) for record in records)
+    return Counter(
+        (record.parent, sanitise_path_segment(record.visible_name)) for record in records
+    )
 
 
 def _safe_name_for_record(
