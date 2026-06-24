@@ -8,6 +8,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from rm2_backup.pdf_compose import PdfCompositionError, compose_svg_pages_to_pdf
 from rm2_backup.render_queue import RenderPlanItem
 from rm2_backup.renderers.base import RenderResult
 
@@ -65,13 +66,19 @@ class SvgRenderSummary:
     def ok_for_composition(self) -> bool:
         return self.total_pages > 0 and self.usable_pages == self.total_pages
 
+    @property
+    def usable_svg_paths(self) -> tuple[Path, ...]:
+        """Return usable SVG paths in page order."""
+
+        return tuple(result.svg_path for result in self.page_results if result.is_usable)
+
 
 class RmcSvgRenderer:
     """Render RM page files to SVG using rmc.
 
     The renderer treats non-empty SVG output as usable even when rmc returns a
-    non-zero exit code. This handles the current observed behaviour where some
-    pages render usable SVG while rmc reports unsupported palette values.
+    non-zero exit code. This handles the observed behaviour where some pages
+    render usable SVG while rmc reports unsupported palette values.
     """
 
     def __init__(
@@ -110,7 +117,7 @@ class RmcSvgRenderer:
         return SvgRenderSummary(uuid=item.uuid, page_results=tuple(results))
 
     def render(self, item: RenderPlanItem, *, raw_xochitl: Path, staging_pdf: Path) -> RenderResult:
-        """Render SVG pages and optionally compose them into a PDF."""
+        """Render SVG pages and compose them into a PDF."""
 
         work_dir = staging_pdf.parent / f"{staging_pdf.stem}-svg"
         summary = self.render_svg_pages(item, raw_xochitl=raw_xochitl, work_dir=work_dir)
@@ -121,26 +128,20 @@ class RmcSvgRenderer:
                 output_path=None,
                 error=_summary_error(summary),
             )
-        if self.compose_command is None:
-            return RenderResult(
-                uuid=item.uuid,
-                ok=False,
-                output_path=None,
-                error="SVG pages rendered, but PDF composition is not configured",
+
+        if self.compose_command is not None:
+            return _run_external_composer(
+                item=item,
+                page_results=summary.page_results,
+                output_pdf=staging_pdf,
+                command=self.compose_command,
+                runner=self.runner,
             )
-        completed = self.runner(
-            _compose_argv(self.compose_command, summary.page_results, staging_pdf),
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-        if completed.returncode != 0 or not staging_pdf.exists() or staging_pdf.stat().st_size == 0:
-            return RenderResult(
-                uuid=item.uuid,
-                ok=False,
-                output_path=None,
-                error=completed.stderr or completed.stdout or "PDF composition failed",
-            )
+
+        try:
+            compose_svg_pages_to_pdf(summary.usable_svg_paths, staging_pdf)
+        except PdfCompositionError as exc:
+            return RenderResult(uuid=item.uuid, ok=False, output_path=None, error=str(exc))
         return RenderResult(uuid=item.uuid, ok=True, output_path=staging_pdf)
 
 
@@ -187,6 +188,30 @@ def _ordered_pages_from_content(raw_xochitl: Path, uuid: str) -> tuple[Path, ...
                 found.append(candidate)
                 break
     return tuple(found)
+
+
+def _run_external_composer(
+    *,
+    item: RenderPlanItem,
+    page_results: Sequence[SvgPageResult],
+    output_pdf: Path,
+    command: str,
+    runner: Runner,
+) -> RenderResult:
+    completed = runner(
+        _compose_argv(command, page_results, output_pdf),
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if completed.returncode != 0 or not output_pdf.exists() or output_pdf.stat().st_size == 0:
+        return RenderResult(
+            uuid=item.uuid,
+            ok=False,
+            output_path=None,
+            error=completed.stderr or completed.stdout or "PDF composition failed",
+        )
+    return RenderResult(uuid=item.uuid, ok=True, output_path=output_pdf)
 
 
 def _compose_argv(command: str, page_results: Sequence[SvgPageResult], output: Path) -> list[str]:
