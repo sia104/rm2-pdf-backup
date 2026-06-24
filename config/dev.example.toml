@@ -1,0 +1,20 @@
+# Development profile for the spare/test RM2.
+# Copy this to a private local file on the Raspberry Pi if you need to customise it.
+# Do not commit real local configs containing secrets or production paths.
+
+[rm2]
+host = "rm2"
+user = "root"
+port = 22
+
+[paths]
+backup_root = "/home/k11-user/rm2-backup-dev"
+raw_current = "/home/k11-user/rm2-backup-dev/raw/current"
+pdf_current = "/home/k11-user/rm2-backup-dev/pdf/current"
+staging = "/home/k11-user/rm2-backup-dev/staging"
+database = "/home/k11-user/rm2-backup-dev/db/manifest.sqlite3"
+reports = "/home/k11-user/rm2-backup-dev/reports"
+logs = "/home/k11-user/rm2-backup-dev/logs"
+
+[renderer]
+mode = "placeholder"
