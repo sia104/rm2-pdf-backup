@@ -46,8 +46,8 @@ class PathsConfig:
 class RendererConfig:
     """Renderer configuration.
 
-    ``mode`` is deliberately explicit. ``placeholder`` is suitable only for
-    local pipeline tests. ``external`` invokes a configured command template.
+    ``placeholder`` is for tests. ``external`` invokes a configured command.
+    ``rmc-svg`` renders RM pages to SVG before PDF composition is configured.
     """
 
     mode: str = "placeholder"
@@ -115,8 +115,9 @@ def parse_app_config(payload: dict[str, Any], *, base_dir: Path | None = None) -
         mode=_optional_string(renderer_table, "mode", default="placeholder"),
         command=_optional_string_or_none(renderer_table, "command"),
     )
-    _validate_app_config(AppConfig(rm2=rm2, paths=paths, renderer=renderer))
-    return AppConfig(rm2=rm2, paths=paths, renderer=renderer)
+    config = AppConfig(rm2=rm2, paths=paths, renderer=renderer)
+    _validate_app_config(config)
+    return config
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -189,7 +190,7 @@ def _resolve_path(value: str, base_dir: Path | None) -> Path:
 
 
 def _validate_app_config(config: AppConfig) -> None:
-    allowed_modes = {"placeholder", "external"}
+    allowed_modes = {"placeholder", "external", "rmc-svg"}
     if config.renderer.mode not in allowed_modes:
         raise ConfigError(f"Renderer mode must be one of {sorted(allowed_modes)}")
     if config.renderer.mode == "external" and config.renderer.command is None:
