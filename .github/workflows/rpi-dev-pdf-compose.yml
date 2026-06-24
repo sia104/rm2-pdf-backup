@@ -47,39 +47,51 @@ jobs:
           reports.mkdir(parents=True, exist_ok=True)
           svg_dir.mkdir(parents=True, exist_ok=True)
           summary = reports / 'pdf-compose-summary.txt'
-          pages = sorted(raw.rglob('*.rm')) if raw.exists() else []
-          renderer = RmcSvgRenderer()
-          svg_paths = []
-          lines = [f'raw_xochitl={raw}', f'rm_page_files={len(pages)}']
-          for index, page in enumerate(pages, start=1):
-              item = RenderPlanItem(page.stem, page.stem, (page.stem,), PurePosixPath(f'{page.stem}.pdf'))
-              result = renderer.render_svg_pages(item, raw_xochitl=page.parent, work_dir=svg_dir)
-              page_result = result.page_results[0] if result.page_results else None
-              size = page_result.svg_path.stat().st_size if page_result and page_result.svg_path.exists() else 0
-              code = page_result.return_code if page_result else 'missing'
-              lines.append(f'page_{index:03d}_exit={code} size={size} file={page.name}')
-              if page_result and page_result.is_usable:
-                  svg_paths.append(page_result.svg_path)
-          lines.append(f'usable_svg_pages={len(svg_paths)}')
           output_pdf = reports / 'composed-test.pdf'
-          if svg_paths:
-              compose_svg_pages_to_pdf(tuple(svg_paths), output_pdf)
-              validation = validate_pdf(output_pdf)
-              lines.append(f'pdf_path={output_pdf}')
-              lines.append(f'pdf_size_bytes={output_pdf.stat().st_size if output_pdf.exists() else 0}')
-              lines.append(f'pdf_valid={validation.ok}')
-              lines.append(f'pdf_reason={validation.reason}')
-              if not validation.ok:
-                  raise SystemExit(1)
-          else:
-              lines.append('pdf_valid=false')
-              lines.append('pdf_reason=no usable SVG pages')
-              raise SystemExit(1)
+          lines = [f'raw_xochitl={raw}']
+          exit_code = 0
+          try:
+              pages = sorted(raw.rglob('*.rm')) if raw.exists() else []
+              renderer = RmcSvgRenderer()
+              svg_paths = []
+              lines.append(f'rm_page_files={len(pages)}')
+              for index, page in enumerate(pages, start=1):
+                  item = RenderPlanItem(page.stem, page.stem, (page.stem,), PurePosixPath(f'{page.stem}.pdf'))
+                  result = renderer.render_svg_pages(item, raw_xochitl=page.parent, work_dir=svg_dir)
+                  page_result = result.page_results[0] if result.page_results else None
+                  size = page_result.svg_path.stat().st_size if page_result and page_result.svg_path.exists() else 0
+                  code = page_result.return_code if page_result else 'missing'
+                  first_err = ''
+                  if page_result and page_result.stderr:
+                      first_err = page_result.stderr.splitlines()[0]
+                  lines.append(f'page_{index:03d}_exit={code} size={size} file={page.name} stderr={first_err}')
+                  if page_result and page_result.is_usable:
+                      svg_paths.append(page_result.svg_path)
+              lines.append(f'usable_svg_pages={len(svg_paths)}')
+              if svg_paths:
+                  compose_svg_pages_to_pdf(tuple(svg_paths), output_pdf)
+                  validation = validate_pdf(output_pdf)
+                  lines.append(f'pdf_path={output_pdf}')
+                  lines.append(f'pdf_size_bytes={output_pdf.stat().st_size if output_pdf.exists() else 0}')
+                  lines.append(f'pdf_valid={validation.ok}')
+                  lines.append(f'pdf_reason={validation.reason}')
+                  if not validation.ok:
+                      exit_code = 1
+              else:
+                  lines.append('pdf_valid=false')
+                  lines.append('pdf_reason=no usable SVG pages')
+                  exit_code = 1
+          except Exception as exc:
+              lines.append(f'exception_type={type(exc).__name__}')
+              lines.append(f'exception={exc}')
+              exit_code = 1
           summary.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           print(summary.read_text(encoding='utf-8'))
+          raise SystemExit(exit_code)
           PY
 
       - name: Upload PDF composition summary
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pdf-compose-summary
@@ -87,8 +99,9 @@ jobs:
           if-no-files-found: error
 
       - name: Upload composed test PDF
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: composed-test-pdf
           path: /home/k11-user/rm2-backup-dev/reports/pdf-compose/composed-test.pdf
-          if-no-files-found: error
+          if-no-files-found: warn
