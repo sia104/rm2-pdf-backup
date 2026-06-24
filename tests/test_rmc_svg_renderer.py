@@ -1,4 +1,4 @@
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 
 from rm2_backup.render_queue import RenderPlanItem
@@ -10,7 +10,7 @@ def _item(uuid: str = "doc") -> RenderPlanItem:
         uuid=uuid,
         visible_name="Notebook",
         visible_path=("Notebook",),
-        output_relative_path=Path("Notebook.pdf"),
+        output_relative_path=PurePosixPath("Notebook.pdf"),
     )
 
 
