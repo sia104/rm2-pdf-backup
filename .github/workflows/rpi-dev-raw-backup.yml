@@ -5,9 +5,9 @@ on:
 
 jobs:
   raw-backup:
-    name: Spare RM2 raw sync and metadata plan
+    name: Spare RM2 raw sync, metadata plan, and placeholder render
     runs-on: self-hosted
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       RM2_SSH_TARGET: rm2
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
@@ -71,3 +71,14 @@ jobs:
           planned_count=$(grep -cv '^Planned PDF outputs:' "$report" || true)
           echo "planned_pdf_outputs=$planned_count"
           echo "Detailed metadata plan stored locally on RPI: $report"
+
+      - name: Run local placeholder render pipeline
+        run: |
+          set -Eeuo pipefail
+          . .venv/bin/activate
+          mkdir -p "$DEV_BACKUP_ROOT/reports" "$DEV_BACKUP_ROOT/db" "$DEV_BACKUP_ROOT/staging"
+          report="$DEV_BACKUP_ROOT/reports/dev-placeholder-run.txt"
+          rm2-backup run-local --config config/dev.example.toml > "$report"
+          sed 's/^/pipeline_summary=/' "$report"
+          echo "Placeholder render report stored locally on RPI: $report"
+          echo "This phase validates pipeline plumbing only; it is not the real visual renderer yet."
