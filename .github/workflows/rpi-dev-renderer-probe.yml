@@ -1,0 +1,63 @@
+name: RPI dev renderer probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  renderer-probe:
+    name: Probe rmc renderer against copied spare RM2 data
+    runs-on: self-hosted
+    timeout-minutes: 20
+    env:
+      DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install local package and rmc
+        run: |
+          python3 -m venv .venv-renderer
+          . .venv-renderer/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m pip install rmc
+          rmc --help | head -40
+
+      - name: Probe first copied RM page
+        run: |
+          set -Eeuo pipefail
+          . .venv-renderer/bin/activate
+          raw_xochitl="$DEV_BACKUP_ROOT/raw/current/xochitl"
+          reports="$DEV_BACKUP_ROOT/reports/renderer-probe"
+          mkdir -p "$reports"
+          if [ ! -d "$raw_xochitl" ]; then
+            echo "Raw xochitl copy is missing: $raw_xochitl" >&2
+            echo "Run the RPI dev raw backup workflow first." >&2
+            exit 1
+          fi
+          sample_rm="$(find "$raw_xochitl" -type f -name '*.rm' | sort | head -1)"
+          if [ -z "$sample_rm" ]; then
+            echo "No .rm page files found in copied raw data." >&2
+            exit 1
+          fi
+          echo "rm_page_files=$(find "$raw_xochitl" -type f -name '*.rm' | wc -l)"
+          sample_pdf="$reports/rmc-first-page.pdf"
+          sample_svg="$reports/rmc-first-page.svg"
+          rmc "$sample_rm" -o "$sample_pdf"
+          rmc -t svg -o "$sample_svg" "$sample_rm"
+          python - <<'PY'
+from pathlib import Path
+from rm2_backup.validate import validate_pdf
+root = Path('/home/k11-user/rm2-backup-dev/reports/renderer-probe')
+pdf = root / 'rmc-first-page.pdf'
+svg = root / 'rmc-first-page.svg'
+validation = validate_pdf(pdf)
+print(f'pdf_exists={pdf.exists()}')
+print(f'pdf_size_bytes={pdf.stat().st_size if pdf.exists() else 0}')
+print(f'pdf_validation={validation.reason}')
+print(f'svg_exists={svg.exists()}')
+print(f'svg_size_bytes={svg.stat().st_size if svg.exists() else 0}')
+if not validation.ok:
+    raise SystemExit(1)
+PY
+          echo "Renderer probe outputs stored locally on RPI: $reports"
