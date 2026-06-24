@@ -49,6 +49,9 @@ templates/
 *.epub
 *.rmdoc
 
+# Allow deliberately synthetic test fixtures.
+!tests/fixtures/**/*.metadata
+
 # OS/editor files
 .DS_Store
 Thumbs.db
