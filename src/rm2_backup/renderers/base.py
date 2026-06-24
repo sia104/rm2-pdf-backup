@@ -1,4 +1,4 @@
-"""Renderer interfaces."""
+"""Backend interfaces."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from rm2_backup.render_queue import RenderPlanItem
 
 @dataclass(frozen=True, slots=True)
 class RenderResult:
-    """Result of rendering one document."""
+    """Result for one document."""
 
     uuid: str
     ok: bool
@@ -20,7 +20,13 @@ class RenderResult:
 
 
 class Renderer(Protocol):
-    """Protocol implemented by renderer backends."""
+    """Protocol implemented by backends."""
 
-    def render(self, item: RenderPlanItem, *, raw_xochitl: Path, staging_pdf: Path) -> RenderResult:
-        """Render one document into a staging PDF path."""
+    def render(
+        self,
+        item: RenderPlanItem,
+        *,
+        raw_xochitl: Path,
+        staging_pdf: Path,
+    ) -> RenderResult:
+        """Create one staged PDF."""
