@@ -2,6 +2,12 @@ name: RPI dev PDF composition
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/rpi-dev-pdf-compose.yml"
+      - "src/rm2_backup/pdf_compose.py"
+      - "src/rm2_backup/renderers/rmc_svg.py"
+      - "tests/test_composition.py"
 
 jobs:
   pdf-compose:
@@ -29,7 +35,6 @@ jobs:
           python - <<'PY'
           from pathlib import Path, PurePosixPath
           import os
-          import subprocess
           from rm2_backup.pdf_compose import compose_svg_pages_to_pdf
           from rm2_backup.render_queue import RenderPlanItem
           from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
