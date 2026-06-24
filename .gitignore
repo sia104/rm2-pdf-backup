@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment and secrets
+.env
+.env.*
+*.key
+*.pem
+*.pub
+id_rsa*
+id_ed25519*
+ssh_config
+
+# Runtime state
+*.sqlite
+*.sqlite3
+*.db
+logs/
+staging/
+tmp/
+.cache/
+
+# Backup outputs and real RM2 data
+raw/
+pdf/
+xochitl/
+templates/
+*.rm
+*.metadata
+*.content
+*.pagedata
+*.local
+*.pdf
+*.epub
+*.rmdoc
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test artifacts
+artifacts/
+reports/
