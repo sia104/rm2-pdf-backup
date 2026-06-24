@@ -1,0 +1,16 @@
+[rm2]
+host = "SPARE_RM2_HOST_OR_IP"
+user = "root"
+port = 22
+
+[paths]
+backup_root = "backup"
+raw_current = "backup/raw/current"
+pdf_current = "backup/pdf/current"
+staging = "backup/staging"
+database = "backup/db/rm2-backup.sqlite"
+reports = "backup/reports"
+logs = "backup/logs"
+
+[renderer]
+mode = "placeholder"
