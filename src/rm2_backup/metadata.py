@@ -8,9 +8,9 @@ layout.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
 import json
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ class MetadataParseError(ValueError):
     """Raised when a metadata file cannot be parsed safely."""
 
 
-class MetadataKind(str, Enum):
+class MetadataKind(StrEnum):
     """Known high-level metadata item categories."""
 
     COLLECTION = "collection"
@@ -84,7 +84,12 @@ def parse_metadata_file(path: str | Path) -> MetadataRecord:
     raw_type = _required_string(payload, "type", metadata_path)
     parent = _optional_string(payload, "parent", default="", path=metadata_path)
     deleted = _optional_bool(payload, "deleted", default=False, path=metadata_path)
-    last_modified = _optional_string(payload, "lastModified", default=None, path=metadata_path)
+    last_modified = _optional_string(
+        payload,
+        "lastModified",
+        default=None,
+        path=metadata_path,
+    )
 
     return MetadataRecord(
         uuid=uuid,
@@ -108,7 +113,10 @@ def scan_metadata_directory(path: str | Path) -> tuple[MetadataRecord, ...]:
     if not directory.is_dir():
         raise MetadataParseError(f"Metadata directory does not exist: {directory}")
 
-    return tuple(parse_metadata_file(file_path) for file_path in sorted(directory.glob("*.metadata")))
+    return tuple(
+        parse_metadata_file(file_path)
+        for file_path in sorted(directory.glob("*.metadata"))
+    )
 
 
 def _uuid_from_metadata_path(path: Path) -> str:
@@ -139,7 +147,9 @@ def _read_json_object(path: Path) -> dict[str, Any]:
 def _required_string(payload: dict[str, Any], key: str, path: Path) -> str:
     value = payload.get(key)
     if not isinstance(value, str) or value == "":
-        raise MetadataParseError(f"Required string field {key!r} missing or invalid in {path}")
+        raise MetadataParseError(
+            f"Required string field {key!r} missing or invalid in {path}"
+        )
     return value
 
 
@@ -158,7 +168,13 @@ def _optional_string(
     return value
 
 
-def _optional_bool(payload: dict[str, Any], key: str, *, default: bool, path: Path) -> bool:
+def _optional_bool(
+    payload: dict[str, Any],
+    key: str,
+    *,
+    default: bool,
+    path: Path,
+) -> bool:
     value = payload.get(key, default)
     if isinstance(value, bool):
         return value
