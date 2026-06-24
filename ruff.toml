@@ -6,4 +6,4 @@ extend-exclude = [
 ]
 
 [lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "UP", "B"]
