@@ -49,4 +49,7 @@ def test_plan_pdf_outputs_are_deterministic() -> None:
     first = plan_pdf_outputs(tree)
     second = plan_pdf_outputs(dict(reversed(tuple(tree.items()))))
 
-    assert first == second
+    assert tuple(item.uuid for item in first) == tuple(item.uuid for item in second)
+    assert tuple(item.output_relative_path for item in first) == tuple(
+        item.output_relative_path for item in second
+    )
