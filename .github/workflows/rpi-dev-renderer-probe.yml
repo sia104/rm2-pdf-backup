@@ -7,7 +7,7 @@ jobs:
   renderer-probe:
     name: Diagnose rmc renderer against copied spare RM2 data
     runs-on: self-hosted
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
       TEST_RM2_SW_VERSION: 3.19.0.82
@@ -25,6 +25,7 @@ jobs:
           echo "test_rm2_sw_version=$TEST_RM2_SW_VERSION"
           echo "which_rmc=$(command -v rmc || true)"
           python -m pip show rmc || true
+          python -m pip show rmscene || true
           rmc --help | sed -n '1,80p' || true
 
       - name: Diagnose copied RM page and renderer commands
@@ -34,15 +35,17 @@ jobs:
           raw_xochitl="$DEV_BACKUP_ROOT/raw/current/xochitl"
           reports="$DEV_BACKUP_ROOT/reports/renderer-probe"
           summary="$reports/renderer-probe-summary.txt"
-          mkdir -p "$reports"
+          mkdir -p "$reports/all-pages"
           : > "$summary"
           log() { echo "$*" | tee -a "$summary"; }
           if [ ! -d "$raw_xochitl" ]; then
             log "raw_xochitl_missing=$raw_xochitl"
             exit 1
           fi
-          rm_count=$(find "$raw_xochitl" -type f -name '*.rm' | wc -l)
           log "test_rm2_sw_version=$TEST_RM2_SW_VERSION"
+          log "rmc_version=$(python -c 'import importlib.metadata as m; print(m.version("rmc"))' 2>/dev/null || echo unknown)"
+          log "rmscene_version=$(python -c 'import importlib.metadata as m; print(m.version("rmscene"))' 2>/dev/null || echo unknown)"
+          rm_count=$(find "$raw_xochitl" -type f -name '*.rm' | wc -l)
           log "rm_page_files=$rm_count"
           sample_rm="$(find "$raw_xochitl" -type f -name '*.rm' | sort | head -1)"
           if [ -z "$sample_rm" ]; then
@@ -52,45 +55,62 @@ jobs:
           log "sample_rm_size_bytes=$(stat -c '%s' "$sample_rm")"
           log "sample_rm_first_16_bytes=$(od -An -tx1 -N16 "$sample_rm" | tr -d ' \n')"
           sample_pdf_a="$reports/rmc-a.pdf"
-          sample_pdf_b="$reports/rmc-b.pdf"
           sample_svg_a="$reports/rmc-a.svg"
           set +e
           rmc "$sample_rm" -o "$sample_pdf_a" > "$reports/rmc-a.stdout" 2> "$reports/rmc-a.stderr"
           code_a=$?
-          rmc -o "$sample_pdf_b" "$sample_rm" > "$reports/rmc-b.stdout" 2> "$reports/rmc-b.stderr"
-          code_b=$?
           rmc -t svg -o "$sample_svg_a" "$sample_rm" > "$reports/rmc-svg.stdout" 2> "$reports/rmc-svg.stderr"
           code_svg=$?
           set -e
-          log "rmc_cmd_a_exit=$code_a"
-          log "rmc_cmd_b_exit=$code_b"
-          log "rmc_svg_exit=$code_svg"
-          for label in rmc-a rmc-b rmc-svg; do
-            log "${label}_stderr_first_lines_begin"
-            sed -n '1,20p' "$reports/${label}.stderr" | tee -a "$summary" || true
-            log "${label}_stderr_first_lines_end"
-          done
-          for name in rmc-a.pdf rmc-b.pdf rmc-a.svg; do
-            p="$reports/$name"
-            if [ -f "$p" ]; then
-              log "${name}_exists=true"
-              log "${name}_size_bytes=$(stat -c '%s' "$p")"
-              if printf '%s' "$name" | grep -q '\.pdf$'; then
-                if head -c 5 "$p" | grep -q '%PDF-'; then
-                  log "${name}_pdf_header=present"
-                else
-                  log "${name}_pdf_header=missing"
-                fi
-              fi
-            else
-              log "${name}_exists=false"
-              log "${name}_size_bytes=0"
+          log "sample_pdf_exit=$code_a"
+          log "sample_svg_exit=$code_svg"
+          log "sample_pdf_size_bytes=$([ -f "$sample_pdf_a" ] && stat -c '%s' "$sample_pdf_a" || echo 0)"
+          log "sample_svg_size_bytes=$([ -f "$sample_svg_a" ] && stat -c '%s' "$sample_svg_a" || echo 0)"
+          log "sample_svg_stderr_head_begin"
+          sed -n '1,15p' "$reports/rmc-svg.stderr" | tee -a "$summary" || true
+          log "sample_svg_stderr_head_end"
+          log "sample_svg_stderr_tail_begin"
+          tail -20 "$reports/rmc-svg.stderr" | tee -a "$summary" || true
+          log "sample_svg_stderr_tail_end"
+          total=0
+          exit0=0
+          nonempty_svg=0
+          failed=0
+          log "all_page_svg_results_begin"
+          while IFS= read -r page; do
+            total=$((total + 1))
+            base="$(basename "$page" .rm)"
+            out="$reports/all-pages/${base}.svg"
+            err="$reports/all-pages/${base}.stderr"
+            set +e
+            rmc -t svg -o "$out" "$page" > /dev/null 2> "$err"
+            code=$?
+            set -e
+            size=0
+            if [ -f "$out" ]; then
+              size=$(stat -c '%s' "$out")
             fi
-          done
-          if [ "$code_a" -eq 0 ] || [ "$code_b" -eq 0 ] || [ "$code_svg" -eq 0 ]; then
-            log "renderer_probe_result=some_command_completed"
+            if [ "$code" -eq 0 ]; then
+              exit0=$((exit0 + 1))
+            else
+              failed=$((failed + 1))
+            fi
+            if [ "$size" -gt 0 ]; then
+              nonempty_svg=$((nonempty_svg + 1))
+            fi
+            printf 'page_%03d_exit=%s size=%s basename=%s\n' "$total" "$code" "$size" "$base" | tee -a "$summary"
+          done < <(find "$raw_xochitl" -type f -name '*.rm' | sort)
+          log "all_page_svg_results_end"
+          log "all_page_total=$total"
+          log "all_page_exit0=$exit0"
+          log "all_page_failed=$failed"
+          log "all_page_nonempty_svg=$nonempty_svg"
+          if [ "$exit0" -gt 0 ]; then
+            log "renderer_probe_result=some_pages_rendered_cleanly"
+          elif [ "$nonempty_svg" -gt 0 ]; then
+            log "renderer_probe_result=only_partial_svg_outputs"
           else
-            log "renderer_probe_result=all_command_variants_failed"
+            log "renderer_probe_result=no_usable_svg_outputs"
           fi
           log "summary_path=$summary"
 
