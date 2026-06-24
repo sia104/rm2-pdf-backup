@@ -1,0 +1,74 @@
+name: RPI dev SVG renderer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  svg-renderer:
+    name: Render copied RM pages to SVG
+    runs-on: self-hosted
+    timeout-minutes: 25
+    env:
+      DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install package and renderer dependency
+        run: |
+          python3 -m venv .venv-svg-renderer
+          . .venv-svg-renderer/bin/activate
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e ".[dev]"
+          python -m pip install --quiet rmc
+
+      - name: Render SVG pages from copied raw data
+        run: |
+          set -Eeuo pipefail
+          . .venv-svg-renderer/bin/activate
+          raw_xochitl="$DEV_BACKUP_ROOT/raw/current/xochitl"
+          reports="$DEV_BACKUP_ROOT/reports/svg-renderer"
+          mkdir -p "$reports"
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          from rm2_backup.render_queue import RenderPlanItem
+          from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
+
+          root = Path(__import__('os').environ['DEV_BACKUP_ROOT'])
+          raw = root / 'raw' / 'current' / 'xochitl'
+          reports = root / 'reports' / 'svg-renderer'
+          summary_path = reports / 'svg-renderer-summary.txt'
+          renderer = RmcSvgRenderer()
+          rm_pages = sorted(raw.rglob('*.rm')) if raw.exists() else []
+          item = RenderPlanItem('all-pages', 'all-pages', ('all-pages',), PurePosixPath('all-pages.pdf'))
+          work_dir = reports / 'all-pages-svg'
+          reports.mkdir(parents=True, exist_ok=True)
+          lines = [f'raw_xochitl={raw}', f'rm_page_files={len(rm_pages)}']
+          if rm_pages:
+              work_dir.mkdir(parents=True, exist_ok=True)
+              usable = 0
+              clean = 0
+              for index, page in enumerate(rm_pages, start=1):
+                  single = RenderPlanItem(page.stem, page.stem, (page.stem,), PurePosixPath(f'{page.stem}.pdf'))
+                  result = renderer.render_svg_pages(single, raw_xochitl=page.parent, work_dir=work_dir)
+                  page_result = result.page_results[0] if result.page_results else None
+                  if page_result and page_result.is_usable:
+                      usable += 1
+                  if page_result and page_result.is_clean:
+                      clean += 1
+                  code = page_result.return_code if page_result else 'missing'
+                  size = page_result.svg_path.stat().st_size if page_result and page_result.svg_path.exists() else 0
+                  lines.append(f'page_{index:03d}_exit={code} size={size} file={page.name}')
+              lines.extend([f'usable_svg_pages={usable}', f'clean_svg_pages={clean}'])
+          else:
+              lines.append('no_rm_pages=true')
+          summary_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(summary_path.read_text(encoding='utf-8'))
+          PY
+
+      - name: Upload SVG renderer summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: svg-renderer-summary
+          path: /home/k11-user/rm2-backup-dev/reports/svg-renderer/svg-renderer-summary.txt
+          if-no-files-found: error
