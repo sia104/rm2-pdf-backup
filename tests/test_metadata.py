@@ -68,9 +68,14 @@ def test_unknown_item_type_is_reported_without_crashing() -> None:
 
 def test_duplicate_visible_names_can_be_parsed() -> None:
     records = scan_metadata_directory(FIXTURE_DIR)
-    duplicate_name_records = [record for record in records if record.visible_name == "Root notebook"]
+    duplicate_name_records = [
+        record for record in records if record.visible_name == "Root notebook"
+    ]
 
-    assert {record.uuid for record in duplicate_name_records} == {"doc-root", "doc-duplicate-name"}
+    assert {record.uuid for record in duplicate_name_records} == {
+        "doc-root",
+        "doc-duplicate-name",
+    }
 
 
 def test_missing_required_field_fails_clearly(tmp_path: Path) -> None:
