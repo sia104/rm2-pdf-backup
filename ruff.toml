@@ -7,3 +7,4 @@ extend-exclude = [
 
 [lint]
 select = ["E", "F", "B"]
+ignore = ["E501"]
