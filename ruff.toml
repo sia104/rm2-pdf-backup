@@ -1,6 +1,9 @@
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = ["src/rm2_backup/metadata.pyi"]
+extend-exclude = [
+  "src/rm2_backup/metadata.pyi",
+  "src/rm2_backup/publish.pyi",
+]
 
 [lint]
 select = ["E", "F", "I", "UP", "B"]
