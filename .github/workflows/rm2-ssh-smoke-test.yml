@@ -1,0 +1,30 @@
+name: RM2 SSH smoke test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rm2-ssh-test:
+    runs-on: [self-hosted, rpi, rm2, dev]
+
+    steps:
+      - name: Check runner identity
+        run: |
+          hostname
+          whoami
+          pwd
+
+      - name: Test SSH access to RM2
+        run: |
+          ssh rm2 'hostname && pwd && ls -la /home/root | head'
+
+      - name: Test xochitl metadata access
+        run: |
+          ssh rm2 'ls -la /home/root/.local/share/remarkable/xochitl | head'
+
+      - name: Test metadata copy
+        run: |
+          rm -rf /tmp/rm2-backup-test
+          mkdir -p /tmp/rm2-backup-test
+          scp rm2:/home/root/.local/share/remarkable/xochitl/*.metadata /tmp/rm2-backup-test/
+          ls -lh /tmp/rm2-backup-test | head
