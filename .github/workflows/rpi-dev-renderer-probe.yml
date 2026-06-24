@@ -5,11 +5,12 @@ on:
 
 jobs:
   renderer-probe:
-    name: Probe rmc renderer against copied spare RM2 data
+    name: Diagnose rmc renderer against copied spare RM2 data
     runs-on: self-hosted
     timeout-minutes: 20
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+      TEST_RM2_SW_VERSION: 3.19.0.82
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -21,9 +22,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
           python -m pip install rmc
-          rmc --help | head -40
+          echo "test_rm2_sw_version=$TEST_RM2_SW_VERSION"
+          echo "which_rmc=$(command -v rmc || true)"
+          python -m pip show rmc || true
+          rmc --help || true
 
-      - name: Probe first copied RM page
+      - name: Diagnose copied RM page and renderer commands
         run: |
           set -Eeuo pipefail
           . .venv-renderer/bin/activate
@@ -35,29 +39,48 @@ jobs:
             echo "Run the RPI dev raw backup workflow first." >&2
             exit 1
           fi
+          rm_count=$(find "$raw_xochitl" -type f -name '*.rm' | wc -l)
+          echo "rm_page_files=$rm_count"
           sample_rm="$(find "$raw_xochitl" -type f -name '*.rm' | sort | head -1)"
           if [ -z "$sample_rm" ]; then
             echo "No .rm page files found in copied raw data." >&2
             exit 1
           fi
-          echo "rm_page_files=$(find "$raw_xochitl" -type f -name '*.rm' | wc -l)"
-          sample_pdf="$reports/rmc-first-page.pdf"
-          sample_svg="$reports/rmc-first-page.svg"
-          rmc "$sample_rm" -o "$sample_pdf"
-          rmc -t svg -o "$sample_svg" "$sample_rm"
-          python - <<'PY'
-          from pathlib import Path
-          from rm2_backup.validate import validate_pdf
-          root = Path('/home/k11-user/rm2-backup-dev/reports/renderer-probe')
-          pdf = root / 'rmc-first-page.pdf'
-          svg = root / 'rmc-first-page.svg'
-          validation = validate_pdf(pdf)
-          print(f'pdf_exists={pdf.exists()}')
-          print(f'pdf_size_bytes={pdf.stat().st_size if pdf.exists() else 0}')
-          print(f'pdf_validation={validation.reason}')
-          print(f'svg_exists={svg.exists()}')
-          print(f'svg_size_bytes={svg.stat().st_size if svg.exists() else 0}')
-          if not validation.ok:
-              raise SystemExit(1)
-          PY
-          echo "Renderer probe outputs stored locally on RPI: $reports"
+          echo "sample_rm_size_bytes=$(stat -c '%s' "$sample_rm")"
+          echo "sample_rm_basename=$(basename "$sample_rm")"
+          echo "sample_rm_first_16_bytes=$(od -An -tx1 -N16 "$sample_rm" | tr -d ' \n')"
+          sample_pdf_a="$reports/rmc-a.pdf"
+          sample_pdf_b="$reports/rmc-b.pdf"
+          sample_svg_a="$reports/rmc-a.svg"
+          set +e
+          rmc "$sample_rm" -o "$sample_pdf_a" > "$reports/rmc-a.stdout" 2> "$reports/rmc-a.stderr"
+          code_a=$?
+          rmc -o "$sample_pdf_b" "$sample_rm" > "$reports/rmc-b.stdout" 2> "$reports/rmc-b.stderr"
+          code_b=$?
+          rmc -t svg -o "$sample_svg_a" "$sample_rm" > "$reports/rmc-svg.stdout" 2> "$reports/rmc-svg.stderr"
+          code_svg=$?
+          set -e
+          echo "rmc_cmd_a_exit=$code_a"
+          echo "rmc_cmd_b_exit=$code_b"
+          echo "rmc_svg_exit=$code_svg"
+          echo "rmc_cmd_a_stderr_begin"
+          sed -n '1,40p' "$reports/rmc-a.stderr" || true
+          echo "rmc_cmd_a_stderr_end"
+          echo "rmc_cmd_b_stderr_begin"
+          sed -n '1,40p' "$reports/rmc-b.stderr" || true
+          echo "rmc_cmd_b_stderr_end"
+          echo "rmc_svg_stderr_begin"
+          sed -n '1,40p' "$reports/rmc-svg.stderr" || true
+          echo "rmc_svg_stderr_end"
+          python -c "from pathlib import Path; from rm2_backup.validate import validate_pdf; root=Path('/home/k11-user/rm2-backup-dev/reports/renderer-probe');
+          for name in ['rmc-a.pdf','rmc-b.pdf','rmc-a.svg']:
+              p=root/name
+              print(f'{name}_exists={p.exists()}')
+              print(f'{name}_size_bytes={p.stat().st_size if p.exists() else 0}')
+              if name.endswith('.pdf') and p.exists():
+                  print(f'{name}_validation={validate_pdf(p).reason}')"
+          if [ "$code_a" -eq 0 ] || [ "$code_b" -eq 0 ] || [ "$code_svg" -eq 0 ]; then
+            echo "At least one renderer command completed. Review output files locally in $reports."
+          else
+            echo "All renderer command variants failed. This diagnostic job succeeds so logs can be inspected."
+          fi
