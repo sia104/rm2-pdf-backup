@@ -1,0 +1,89 @@
+name: RPI dev PDF composition
+
+on:
+  workflow_dispatch:
+
+jobs:
+  pdf-compose:
+    name: Compose copied RM pages into a test PDF
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install package and composition dependencies
+        run: |
+          python3 -m venv .venv-pdf-compose
+          . .venv-pdf-compose/bin/activate
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e ".[dev]"
+          python -m pip install --quiet rmc cairosvg pypdf
+
+      - name: Render copied pages to SVG and compose PDF
+        run: |
+          set -Eeuo pipefail
+          . .venv-pdf-compose/bin/activate
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import os
+          import subprocess
+          from rm2_backup.pdf_compose import compose_svg_pages_to_pdf
+          from rm2_backup.render_queue import RenderPlanItem
+          from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
+          from rm2_backup.validate import validate_pdf
+
+          root = Path(os.environ['DEV_BACKUP_ROOT'])
+          raw = root / 'raw' / 'current' / 'xochitl'
+          reports = root / 'reports' / 'pdf-compose'
+          svg_dir = reports / 'svg'
+          reports.mkdir(parents=True, exist_ok=True)
+          svg_dir.mkdir(parents=True, exist_ok=True)
+          summary = reports / 'pdf-compose-summary.txt'
+          pages = sorted(raw.rglob('*.rm')) if raw.exists() else []
+          renderer = RmcSvgRenderer()
+          svg_paths = []
+          lines = [f'raw_xochitl={raw}', f'rm_page_files={len(pages)}']
+          for index, page in enumerate(pages, start=1):
+              item = RenderPlanItem(page.stem, page.stem, (page.stem,), PurePosixPath(f'{page.stem}.pdf'))
+              result = renderer.render_svg_pages(item, raw_xochitl=page.parent, work_dir=svg_dir)
+              page_result = result.page_results[0] if result.page_results else None
+              size = page_result.svg_path.stat().st_size if page_result and page_result.svg_path.exists() else 0
+              code = page_result.return_code if page_result else 'missing'
+              lines.append(f'page_{index:03d}_exit={code} size={size} file={page.name}')
+              if page_result and page_result.is_usable:
+                  svg_paths.append(page_result.svg_path)
+          lines.append(f'usable_svg_pages={len(svg_paths)}')
+          output_pdf = reports / 'composed-test.pdf'
+          if svg_paths:
+              compose_svg_pages_to_pdf(tuple(svg_paths), output_pdf)
+              validation = validate_pdf(output_pdf)
+              lines.append(f'pdf_path={output_pdf}')
+              lines.append(f'pdf_size_bytes={output_pdf.stat().st_size if output_pdf.exists() else 0}')
+              lines.append(f'pdf_valid={validation.ok}')
+              lines.append(f'pdf_reason={validation.reason}')
+              if not validation.ok:
+                  raise SystemExit(1)
+          else:
+              lines.append('pdf_valid=false')
+              lines.append('pdf_reason=no usable SVG pages')
+              raise SystemExit(1)
+          summary.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(summary.read_text(encoding='utf-8'))
+          PY
+
+      - name: Upload PDF composition summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-compose-summary
+          path: /home/k11-user/rm2-backup-dev/reports/pdf-compose/pdf-compose-summary.txt
+          if-no-files-found: error
+
+      - name: Upload composed test PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: composed-test-pdf
+          path: /home/k11-user/rm2-backup-dev/reports/pdf-compose/composed-test.pdf
+          if-no-files-found: error
