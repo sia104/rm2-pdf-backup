@@ -1,0 +1,90 @@
+name: RPI dev rmrl probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/rpi-dev-rmrl-probe.yml"
+
+jobs:
+  rmrl-probe:
+    name: Probe rmrl renderer availability
+    runs-on: self-hosted
+    timeout-minutes: 20
+    env:
+      DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Probe rmrl install and interfaces
+        run: |
+          python3 -m venv .venv-rmrl-probe
+          . .venv-rmrl-probe/bin/activate
+          python -m pip install --quiet --upgrade pip
+          python - <<'PY'
+          from pathlib import Path
+          import importlib
+          import importlib.metadata
+          import os
+          import pkgutil
+          import subprocess
+          import sys
+
+          root = Path(os.environ['DEV_BACKUP_ROOT'])
+          reports = root / 'reports' / 'rmrl-probe'
+          reports.mkdir(parents=True, exist_ok=True)
+          summary = reports / 'rmrl-probe-summary.txt'
+          lines = []
+
+          def record(name, value):
+              lines.append(f'{name}={value}')
+
+          record('python', sys.version.split()[0])
+          install = subprocess.run(
+              [sys.executable, '-m', 'pip', 'install', '--quiet', 'rmrl'],
+              check=False,
+              text=True,
+              capture_output=True,
+          )
+          record('pip_install_returncode', install.returncode)
+          if install.stderr:
+              record('pip_install_stderr_first', install.stderr.splitlines()[0])
+
+          try:
+              version = importlib.metadata.version('rmrl')
+          except importlib.metadata.PackageNotFoundError:
+              version = 'not-installed'
+          record('rmrl_distribution_version', version)
+
+          try:
+              module = importlib.import_module('rmrl')
+              record('import_rmrl', 'ok')
+              module_path = getattr(module, '__file__', '')
+              record('rmrl_module_path', module_path)
+              attrs = [name for name in dir(module) if not name.startswith('_')]
+              record('rmrl_public_attrs', ','.join(attrs[:80]))
+              if hasattr(module, '__path__'):
+                  submods = [mod.name for mod in pkgutil.iter_modules(module.__path__)]
+                  record('rmrl_submodules', ','.join(submods[:80]))
+          except Exception as exc:
+              record('import_rmrl', 'failed')
+              record('import_exception_type', type(exc).__name__)
+              record('import_exception', str(exc))
+
+          raw = root / 'raw' / 'current' / 'xochitl'
+          pages = sorted(raw.rglob('*.rm')) if raw.exists() else []
+          record('rm_page_files', len(pages))
+          record('first_rm_page', pages[0] if pages else '')
+
+          summary.write_text('\n'.join(str(line) for line in lines) + '\n', encoding='utf-8')
+          print(summary.read_text(encoding='utf-8'))
+          PY
+
+      - name: Upload rmrl probe summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmrl-probe-summary
+          path: /home/k11-user/rm2-backup-dev/reports/rmrl-probe/rmrl-probe-summary.txt
+          if-no-files-found: error
