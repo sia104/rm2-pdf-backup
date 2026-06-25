@@ -2,6 +2,11 @@ name: RPI dev raw copy and run-local
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/rpi-dev-raw-copy.yml"
   pull_request:
     paths:
       - ".github/workflows/rpi-dev-raw-copy.yml"
