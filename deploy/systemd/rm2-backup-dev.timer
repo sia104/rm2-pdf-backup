@@ -1,0 +1,11 @@
+[Unit]
+Description=Run RM2 PDF backup dev pipeline daily
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+Persistent=true
+RandomizedDelaySec=15min
+Unit=rm2-backup-dev.service
+
+[Install]
+WantedBy=timers.target
