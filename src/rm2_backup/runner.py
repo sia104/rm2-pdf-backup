@@ -9,7 +9,10 @@ from rm2_backup.config import AppConfig
 from rm2_backup.manifest import Manifest, hash_document_source
 from rm2_backup.metadata import scan_metadata_directory
 from rm2_backup.render_queue import plan_pdf_outputs
+from rm2_backup.renderers.base import Renderer
+from rm2_backup.renderers.external import ExternalCommandRenderer
 from rm2_backup.renderers.null import PlaceholderRenderer
+from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
 from rm2_backup.tree import build_visible_tree
 from rm2_backup.validate import validate_pdf
 
@@ -25,13 +28,13 @@ class PipelineResult:
 
 
 def run_local(config: AppConfig) -> PipelineResult:
-    """Run the local planning and placeholder-render pipeline."""
+    """Run the local planning and render pipeline."""
 
     source_dir = config.paths.raw_current / "xochitl"
     metadata = scan_metadata_directory(source_dir)
     tree = build_visible_tree(metadata)
     plan = plan_pdf_outputs(tree)
-    renderer = PlaceholderRenderer()
+    renderer = _renderer_from_config(config)
 
     completed = 0
     skipped = 0
@@ -49,7 +52,12 @@ def run_local(config: AppConfig) -> PipelineResult:
             result = renderer.render(item, raw_xochitl=source_dir, staging_pdf=staged_pdf)
             if not result.ok or result.output_path is None:
                 failed += 1
-                manifest.record_render_result(item, source_hash=source_hash, status="failed")
+                manifest.record_render_result(
+                    item,
+                    source_hash=source_hash,
+                    status="failed",
+                    error=result.error,
+                )
                 continue
 
             validation = validate_pdf(result.output_path)
@@ -71,6 +79,18 @@ def run_local(config: AppConfig) -> PipelineResult:
         skipped=skipped,
         failed=failed,
     )
+
+
+def _renderer_from_config(config: AppConfig) -> Renderer:
+    if config.renderer.mode == "placeholder":
+        return PlaceholderRenderer()
+    if config.renderer.mode == "external":
+        if config.renderer.command is None:
+            raise ValueError("External renderer mode requires a command")
+        return ExternalCommandRenderer(config.renderer.command)
+    if config.renderer.mode == "rmc-svg":
+        return RmcSvgRenderer(compose_command=config.renderer.command)
+    raise ValueError(f"Unsupported renderer mode: {config.renderer.mode}")
 
 
 def _staged_pdf_path(staging_root: Path, uuid: str) -> Path:
