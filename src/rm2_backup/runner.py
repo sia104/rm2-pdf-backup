@@ -9,7 +9,7 @@ from rm2_backup.config import AppConfig
 from rm2_backup.manifest import Manifest, hash_document_source
 from rm2_backup.metadata import scan_metadata_directory
 from rm2_backup.publish import PublishError, publish_validated_pdf
-from rm2_backup.render_queue import plan_pdf_outputs
+from rm2_backup.render_queue import RenderPlanItem, plan_pdf_outputs
 from rm2_backup.renderers.base import Renderer
 from rm2_backup.renderers.external import ExternalCommandRenderer
 from rm2_backup.renderers.null import PlaceholderRenderer
@@ -27,6 +27,19 @@ class PipelineResult:
     skipped: int
     failed: int
     published: int = 0
+    report_path: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PipelineEvent:
+    """One document-level pipeline event for reporting."""
+
+    uuid: str
+    visible_path: tuple[str, ...]
+    output_relative_path: str
+    status: str
+    message: str | None = None
+    destination: Path | None = None
 
 
 def run_local(config: AppConfig) -> PipelineResult:
@@ -42,6 +55,7 @@ def run_local(config: AppConfig) -> PipelineResult:
     skipped = 0
     failed = 0
     published = 0
+    events: list[PipelineEvent] = []
 
     with Manifest(config.paths.database) as manifest:
         for item in plan:
@@ -49,6 +63,7 @@ def run_local(config: AppConfig) -> PipelineResult:
             decision = manifest.decide(item, source_hash)
             if not decision.should_render:
                 skipped += 1
+                events.append(_event(item, "skipped", decision.reason))
                 continue
 
             staged_pdf = _staged_pdf_path(config.paths.staging, item.uuid)
@@ -61,6 +76,7 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=result.error,
                 )
+                events.append(_event(item, "failed", result.error))
                 continue
 
             validation = validate_pdf(result.output_path)
@@ -72,10 +88,11 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=validation.reason,
                 )
+                events.append(_event(item, "failed", validation.reason))
                 continue
 
             try:
-                publish_validated_pdf(
+                publish_result = publish_validated_pdf(
                     uuid=item.uuid,
                     staged_pdf=result.output_path,
                     pdf_root=config.paths.pdf_current,
@@ -89,11 +106,23 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=str(exc),
                 )
+                events.append(_event(item, "failed", str(exc)))
                 continue
 
             completed += 1
             published += 1
             manifest.record_render_result(item, source_hash=source_hash, status="ok")
+            events.append(_event(item, "ok", destination=publish_result.destination))
+
+    report_path = _write_run_report(
+        config.paths.reports / "run-local-report.txt",
+        planned=len(plan),
+        completed=completed,
+        skipped=skipped,
+        failed=failed,
+        published=published,
+        events=events,
+    )
 
     return PipelineResult(
         planned=len(plan),
@@ -101,6 +130,7 @@ def run_local(config: AppConfig) -> PipelineResult:
         skipped=skipped,
         failed=failed,
         published=published,
+        report_path=report_path,
     )
 
 
@@ -118,3 +148,57 @@ def _renderer_from_config(config: AppConfig) -> Renderer:
 
 def _staged_pdf_path(staging_root: Path, uuid: str) -> Path:
     return staging_root / "pdf" / f"{uuid}.pdf"
+
+
+def _event(
+    item: RenderPlanItem,
+    status: str,
+    message: str | None = None,
+    *,
+    destination: Path | None = None,
+) -> PipelineEvent:
+    return PipelineEvent(
+        uuid=item.uuid,
+        visible_path=item.visible_path,
+        output_relative_path=str(item.output_relative_path),
+        status=status,
+        message=message,
+        destination=destination,
+    )
+
+
+def _write_run_report(
+    path: Path,
+    *,
+    planned: int,
+    completed: int,
+    skipped: int,
+    failed: int,
+    published: int,
+    events: list[PipelineEvent],
+) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "RM2 PDF backup run report",
+        "",
+        f"planned: {planned}",
+        f"completed: {completed}",
+        f"skipped: {skipped}",
+        f"failed: {failed}",
+        f"published: {published}",
+        "",
+        "Documents",
+    ]
+    if not events:
+        lines.append("- no documents processed")
+    for event in events:
+        visible = "/".join(event.visible_path) if event.visible_path else event.uuid
+        lines.append(f"- {event.status}: {visible}")
+        lines.append(f"  uuid: {event.uuid}")
+        lines.append(f"  output: {event.output_relative_path}")
+        if event.destination is not None:
+            lines.append(f"  destination: {event.destination}")
+        if event.message:
+            lines.append(f"  message: {' '.join(event.message.split())}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
