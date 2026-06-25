@@ -14,6 +14,7 @@ from rm2_backup.renderers.base import Renderer
 from rm2_backup.renderers.external import ExternalCommandRenderer
 from rm2_backup.renderers.null import PlaceholderRenderer
 from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
+from rm2_backup.templates import build_template_inventory
 from rm2_backup.tree import build_visible_tree
 from rm2_backup.validate import validate_pdf
 
@@ -46,6 +47,7 @@ def run_local(config: AppConfig) -> PipelineResult:
     """Run the local planning, render, validate and publish pipeline."""
 
     source_dir = config.paths.raw_current / "xochitl"
+    template_inventory = build_template_inventory(config.paths.raw_current / "templates")
     metadata = scan_metadata_directory(source_dir)
     tree = build_visible_tree(metadata)
     plan = plan_pdf_outputs(tree)
@@ -121,6 +123,7 @@ def run_local(config: AppConfig) -> PipelineResult:
         skipped=skipped,
         failed=failed,
         published=published,
+        template_count=template_inventory.count,
         events=events,
     )
 
@@ -175,6 +178,7 @@ def _write_run_report(
     skipped: int,
     failed: int,
     published: int,
+    template_count: int | None = None,
     events: list[PipelineEvent],
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -186,9 +190,10 @@ def _write_run_report(
         f"skipped: {skipped}",
         f"failed: {failed}",
         f"published: {published}",
-        "",
-        "Documents",
     ]
+    if template_count is not None:
+        lines.append(f"templates_file_count: {template_count}")
+    lines.extend(["", "Documents"])
     if not events:
         lines.append("- no documents processed")
     for event in events:
