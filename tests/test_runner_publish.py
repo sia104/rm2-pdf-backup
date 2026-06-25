@@ -18,6 +18,7 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
         skipped=0,
         failed=1,
         published=1,
+        template_count=66,
         events=[
             PipelineEvent(
                 uuid="ok-doc",
@@ -38,6 +39,7 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
     text = report.read_text(encoding="utf-8")
     assert "planned: 2" in text
     assert "published: 1" in text
+    assert "templates_file_count: 66" in text
     assert "- ok: Folder/Notebook" in text
     assert "- failed: Broken" in text
     assert "message: renderer error with detail" in text
