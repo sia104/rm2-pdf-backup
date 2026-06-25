@@ -33,9 +33,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         app_config = _load_app_config_or_exit(args.config)
         result = run_local(app_config)
         print(
-            "planned={0.planned} completed={0.completed} skipped={0.skipped} failed={0.failed}".format(
-                result
-            )
+            "planned={0.planned} completed={0.completed} skipped={0.skipped} "
+            "failed={0.failed} published={0.published}".format(result)
         )
         return
 
