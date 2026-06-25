@@ -1,0 +1,128 @@
+name: RPI dev two-run check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/rpi-dev-two-run.yml"
+      - "src/rm2_backup/**"
+      - "tests/**"
+
+jobs:
+  two-run:
+    name: Run local pipeline twice against copied RM2 data
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install package and renderer dependencies
+        run: |
+          python3 -m venv .venv-two-run
+          . .venv-two-run/bin/activate
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e ".[dev]"
+          python -m pip install --quiet rmc cairosvg pypdf
+
+      - name: Run local pipeline twice
+        run: |
+          set -Eeuo pipefail
+          . .venv-two-run/bin/activate
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+          import subprocess
+
+          root = Path(os.environ['DEV_BACKUP_ROOT'])
+          raw_current = root / 'raw' / 'current'
+          source = raw_current / 'xochitl'
+          work = root / 'reports' / 'two-run'
+          staging = work / 'staging'
+          pdf_current = work / 'pdf-current'
+          database = work / 'two-run.sqlite'
+          config_path = work / 'app-config.toml'
+          summary_path = work / 'two-run-summary.txt'
+          work.mkdir(parents=True, exist_ok=True)
+          staging.mkdir(parents=True, exist_ok=True)
+          pdf_current.mkdir(parents=True, exist_ok=True)
+          if database.exists():
+              database.unlink()
+
+          config_path.write_text(
+              '\n'.join(
+                  [
+                      '[rm2]',
+                      'host = "rm2"',
+                      'user = "root"',
+                      '',
+                      '[paths]',
+                      f'backup_root = "{root}"',
+                      f'raw_current = "{raw_current}"',
+                      f'pdf_current = "{pdf_current}"',
+                      f'staging = "{staging}"',
+                      f'database = "{database}"',
+                      f'reports = "{work}"',
+                      f'logs = "{work / "logs"}"',
+                      '',
+                      '[renderer]',
+                      'mode = "rmc-svg"',
+                      '',
+                  ]
+              ),
+              encoding='utf-8',
+          )
+
+          lines = [f'source={source}', f'config={config_path}']
+          if not source.exists():
+              lines.append('error=missing copied xochitl source')
+              summary_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+              print(summary_path.read_text(encoding='utf-8'))
+              raise SystemExit(1)
+
+          def run_once(label):
+              completed = subprocess.run(
+                  ['rm2-backup', 'run-local', '--config', str(config_path)],
+                  check=False,
+                  text=True,
+                  capture_output=True,
+              )
+              stdout = completed.stdout.strip()
+              lines.append(f'{label}_returncode={completed.returncode}')
+              lines.append(f'{label}_stdout={stdout}')
+              if completed.stderr.strip():
+                  lines.append(f'{label}_stderr={completed.stderr.strip()}')
+              counts = dict(re.findall(r'(planned|completed|skipped|failed|published)=([0-9]+)', stdout))
+              return completed.returncode, {key: int(value) for key, value in counts.items()}
+
+          first_code, first = run_once('first')
+          second_code, second = run_once('second')
+
+          published_pdfs = sorted(pdf_current.rglob('*.pdf'))
+          lines.append(f'published_pdf_count={len(published_pdfs)}')
+          for pdf in published_pdfs[:20]:
+              lines.append(f'published_pdf={pdf} size={pdf.stat().st_size}')
+
+          summary_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(summary_path.read_text(encoding='utf-8'))
+
+          if first_code != 0 or second_code != 0:
+              raise SystemExit(1)
+          if first.get('published', 0) < 1:
+              raise SystemExit('first run did not publish any PDFs')
+          if second.get('skipped', 0) < first.get('completed', 0):
+              raise SystemExit('second run did not skip previously completed documents')
+          if second.get('published', 0) != 0:
+              raise SystemExit('second run republished unchanged documents')
+          PY
+
+      - name: Upload two-run summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: two-run-summary
+          path: /home/k11-user/rm2-backup-dev/reports/two-run/two-run-summary.txt
+          if-no-files-found: error
