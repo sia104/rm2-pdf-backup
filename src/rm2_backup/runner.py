@@ -14,7 +14,7 @@ from rm2_backup.renderers.base import Renderer
 from rm2_backup.renderers.external import ExternalCommandRenderer
 from rm2_backup.renderers.null import PlaceholderRenderer
 from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
-from rm2_backup.templates import build_template_inventory
+from rm2_backup.templates import build_template_inventory, summarise_document_templates
 from rm2_backup.tree import build_visible_tree
 from rm2_backup.validate import validate_pdf
 
@@ -61,11 +61,16 @@ def run_local(config: AppConfig) -> PipelineResult:
 
     with Manifest(config.paths.database) as manifest:
         for item in plan:
+            template_message = summarise_document_templates(
+                raw_xochitl=source_dir,
+                uuid=item.uuid,
+                inventory=template_inventory,
+            ).message
             source_hash = hash_document_source(source_dir, item.uuid)
             decision = manifest.decide(item, source_hash)
             if not decision.should_render:
                 skipped += 1
-                events.append(_event(item, "skipped", decision.reason))
+                events.append(_event(item, "skipped", _join_messages(decision.reason, template_message)))
                 continue
 
             staged_pdf = _staged_pdf_path(config.paths.staging, item.uuid)
@@ -78,7 +83,7 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=result.error,
                 )
-                events.append(_event(item, "failed", result.error))
+                events.append(_event(item, "failed", _join_messages(result.error, template_message)))
                 continue
 
             validation = validate_pdf(result.output_path)
@@ -90,7 +95,7 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=validation.reason,
                 )
-                events.append(_event(item, "failed", validation.reason))
+                events.append(_event(item, "failed", _join_messages(validation.reason, template_message)))
                 continue
 
             try:
@@ -108,13 +113,13 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=str(exc),
                 )
-                events.append(_event(item, "failed", str(exc)))
+                events.append(_event(item, "failed", _join_messages(str(exc), template_message)))
                 continue
 
             completed += 1
             published += 1
             manifest.record_render_result(item, source_hash=source_hash, status="ok")
-            events.append(_event(item, "ok", destination=publish_result.destination))
+            events.append(_event(item, "ok", template_message, destination=publish_result.destination))
 
     report_path = _write_run_report(
         config.paths.reports / "run-local-report.txt",
@@ -151,6 +156,10 @@ def _renderer_from_config(config: AppConfig) -> Renderer:
 
 def _staged_pdf_path(staging_root: Path, uuid: str) -> Path:
     return staging_root / "pdf" / f"{uuid}.pdf"
+
+
+def _join_messages(*messages: str | None) -> str:
+    return "; ".join(message for message in messages if message)
 
 
 def _event(
