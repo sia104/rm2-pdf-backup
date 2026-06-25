@@ -7,6 +7,7 @@ on:
       - ".github/workflows/rpi-dev-run-local.yml"
       - "src/rm2_backup/**"
       - "tests/**"
+      - "docs/run-local-rpi-test.md"
 
 jobs:
   run-local:
@@ -104,10 +105,15 @@ jobs:
               with sqlite3.connect(database) as con:
                   try:
                       rows = con.execute(
-                          'select status, count(*) from render_manifest group by status order by status'
+                          'select render_status, count(*) from documents group by render_status order by render_status'
                       ).fetchall()
                       for status, count in rows:
                           lines.append(f'manifest_status_{status}={count}')
+                      failures = con.execute(
+                          'select uuid, error from documents where render_status = "failed" order by uuid limit 20'
+                      ).fetchall()
+                      for uuid, error in failures:
+                          lines.append(f'manifest_failure={uuid} error={error}')
                   except sqlite3.Error as exc:
                       lines.append(f'manifest_query_error={exc}')
           else:
