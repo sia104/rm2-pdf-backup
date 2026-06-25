@@ -14,6 +14,7 @@ from rm2_backup.renderers.base import Renderer
 from rm2_backup.renderers.external import ExternalCommandRenderer
 from rm2_backup.renderers.null import PlaceholderRenderer
 from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
+from rm2_backup.templates import TemplateProvenance, template_provenance_for_document
 from rm2_backup.tree import build_visible_tree
 from rm2_backup.validate import validate_pdf
 
@@ -40,6 +41,7 @@ class PipelineEvent:
     status: str
     message: str | None = None
     destination: Path | None = None
+    template_provenance: TemplateProvenance | None = None
 
 
 def run_local(config: AppConfig) -> PipelineResult:
@@ -59,11 +61,16 @@ def run_local(config: AppConfig) -> PipelineResult:
 
     with Manifest(config.paths.database) as manifest:
         for item in plan:
+            template_provenance = template_provenance_for_document(
+                raw_xochitl=source_dir,
+                raw_current=config.paths.raw_current,
+                uuid=item.uuid,
+            )
             source_hash = hash_document_source(source_dir, item.uuid)
             decision = manifest.decide(item, source_hash)
             if not decision.should_render:
                 skipped += 1
-                events.append(_event(item, "skipped", decision.reason))
+                events.append(_event(item, "skipped", decision.reason, template_provenance=template_provenance))
                 continue
 
             staged_pdf = _staged_pdf_path(config.paths.staging, item.uuid)
@@ -76,7 +83,7 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=result.error,
                 )
-                events.append(_event(item, "failed", result.error))
+                events.append(_event(item, "failed", result.error, template_provenance=template_provenance))
                 continue
 
             validation = validate_pdf(result.output_path)
@@ -88,7 +95,7 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=validation.reason,
                 )
-                events.append(_event(item, "failed", validation.reason))
+                events.append(_event(item, "failed", validation.reason, template_provenance=template_provenance))
                 continue
 
             try:
@@ -106,13 +113,13 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=str(exc),
                 )
-                events.append(_event(item, "failed", str(exc)))
+                events.append(_event(item, "failed", str(exc), template_provenance=template_provenance))
                 continue
 
             completed += 1
             published += 1
             manifest.record_render_result(item, source_hash=source_hash, status="ok")
-            events.append(_event(item, "ok", destination=publish_result.destination))
+            events.append(_event(item, "ok", destination=publish_result.destination, template_provenance=template_provenance))
 
     report_path = _write_run_report(
         config.paths.reports / "run-local-report.txt",
@@ -156,6 +163,7 @@ def _event(
     message: str | None = None,
     *,
     destination: Path | None = None,
+    template_provenance: TemplateProvenance | None = None,
 ) -> PipelineEvent:
     return PipelineEvent(
         uuid=item.uuid,
@@ -164,6 +172,7 @@ def _event(
         status=status,
         message=message,
         destination=destination,
+        template_provenance=template_provenance,
     )
 
 
@@ -198,6 +207,24 @@ def _write_run_report(
         lines.append(f"  output: {event.output_relative_path}")
         if event.destination is not None:
             lines.append(f"  destination: {event.destination}")
+        if event.template_provenance is not None:
+            lines.append(
+                "  templates: "
+                f"files={event.template_provenance.file_count} "
+                f"templates_json={event.template_provenance.has_templates_json} "
+                f"referenced={len(event.template_provenance.referenced)} "
+                f"missing={len(event.template_provenance.missing)}"
+            )
+            if event.template_provenance.referenced:
+                lines.append(
+                    "  template_references: "
+                    + ", ".join(event.template_provenance.referenced)
+                )
+            if event.template_provenance.missing:
+                lines.append(
+                    "  template_warning: missing referenced template(s): "
+                    + ", ".join(event.template_provenance.missing)
+                )
         if event.message:
             lines.append(f"  message: {' '.join(event.message.split())}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
