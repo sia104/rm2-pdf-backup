@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+_TEMPLATE_VALUE_KEYS = {"name", "value", "filename", "file", "template", "templateName"}
+
 
 @dataclass(frozen=True, slots=True)
 class TemplateFile:
@@ -62,11 +64,7 @@ class DocumentTemplateSummary:
 
 
 def build_template_inventory(root: Path) -> TemplateInventory:
-    """Hash copied template files under ``root``.
-
-    Missing template directories are represented as an empty inventory so template
-    absence can be reported as a warning rather than a render failure.
-    """
+    """Hash copied template files under ``root``."""
 
     if not root.exists():
         return TemplateInventory(root=root, files=())
@@ -91,13 +89,7 @@ def summarise_document_templates(
     uuid: str,
     inventory: TemplateInventory,
 ) -> DocumentTemplateSummary:
-    """Return template references for a document, if detectable.
-
-    reMarkable content JSON has changed across software versions. Rather than
-    assuming one schema, this scans JSON values under keys containing
-    ``template`` and records string values. Unknown or missing content files are
-    treated as no detectable references.
-    """
+    """Return template references for a document, if detectable."""
 
     references = _document_template_references(raw_xochitl / f"{uuid}.content")
     missing = tuple(ref for ref in references if ref not in inventory.stems)
@@ -119,9 +111,9 @@ def _document_template_references(path: Path) -> tuple[str, ...]:
 def _collect_template_refs(value: Any, *, refs: set[str]) -> None:
     if isinstance(value, dict):
         for key, item in value.items():
-            key_text = str(key).lower()
-            if "template" in key_text:
-                _collect_template_value(item, refs=refs)
+            key_text = str(key)
+            if "template" in key_text.lower():
+                _collect_template_node(item, refs=refs)
             else:
                 _collect_template_refs(item, refs=refs)
     elif isinstance(value, list):
@@ -129,15 +121,32 @@ def _collect_template_refs(value: Any, *, refs: set[str]) -> None:
             _collect_template_refs(item, refs=refs)
 
 
-def _collect_template_value(value: Any, *, refs: set[str]) -> None:
-    if isinstance(value, str) and value.strip():
-        refs.add(value.strip())
-    elif isinstance(value, dict):
-        for item in value.values():
-            _collect_template_value(item, refs=refs)
-    elif isinstance(value, list):
+def _collect_template_node(value: Any, *, refs: set[str]) -> None:
+    if isinstance(value, str):
+        _add_template_ref(value, refs=refs)
+        return
+    if isinstance(value, list):
         for item in value:
-            _collect_template_value(item, refs=refs)
+            _collect_template_node(item, refs=refs)
+        return
+    if not isinstance(value, dict):
+        return
+
+    for key, item in value.items():
+        key_text = str(key)
+        if key_text in _TEMPLATE_VALUE_KEYS and isinstance(item, str):
+            _add_template_ref(item, refs=refs)
+        elif "template" in key_text.lower():
+            _collect_template_node(item, refs=refs)
+
+
+def _add_template_ref(value: str, *, refs: set[str]) -> None:
+    cleaned = value.strip()
+    if not cleaned:
+        return
+    if ":" in cleaned and cleaned.replace(":", "").isdigit():
+        return
+    refs.add(Path(cleaned).stem)
 
 
 def _sha256_file(path: Path) -> str:
