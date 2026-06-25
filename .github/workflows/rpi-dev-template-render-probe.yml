@@ -1,0 +1,127 @@
+name: RPI dev template render probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/rpi-dev-template-render-probe.yml"
+      - "src/rm2_backup/**"
+      - "tests/**"
+
+jobs:
+  template-probe:
+    name: Probe template rendering evidence
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install package and probe dependencies
+        run: |
+          python3 -m venv .venv-template-probe
+          . .venv-template-probe/bin/activate
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e ".[dev]"
+          python -m pip install --quiet rmc cairosvg pypdf
+
+      - name: Probe copied templates and rendered PDFs
+        run: |
+          set -Eeuo pipefail
+          . .venv-template-probe/bin/activate
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import subprocess
+          import xml.etree.ElementTree as ET
+
+          from rm2_backup.metadata import scan_metadata_directory
+          from rm2_backup.templates import build_template_inventory, summarise_document_templates
+          from rm2_backup.tree import build_visible_tree
+          from rm2_backup.render_queue import plan_pdf_outputs
+          from rm2_backup.renderers.rmc_svg import find_rm_page_files
+
+          root = Path(os.environ['DEV_BACKUP_ROOT'])
+          raw_current = root / 'raw' / 'current'
+          source = raw_current / 'xochitl'
+          template_root = raw_current / 'templates'
+          work = root / 'reports' / 'template-render-probe'
+          svg_root = work / 'svg'
+          summary_path = work / 'template-render-probe-summary.txt'
+          work.mkdir(parents=True, exist_ok=True)
+          svg_root.mkdir(parents=True, exist_ok=True)
+
+          lines = [f'source={source}', f'template_root={template_root}']
+          if not source.exists():
+              lines.append('error=missing copied xochitl source')
+              summary_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+              print(summary_path.read_text(encoding='utf-8'))
+              raise SystemExit(1)
+
+          inventory = build_template_inventory(template_root)
+          lines.append(f'templates_file_count={inventory.count}')
+          for file in inventory.files[:20]:
+              lines.append(f'template_file={file.relative_path} stem={file.stem} sha256={file.sha256}')
+
+          metadata = scan_metadata_directory(source)
+          tree = build_visible_tree(metadata)
+          plan = plan_pdf_outputs(tree)
+          lines.append(f'planned_documents={len(plan)}')
+
+          probed = 0
+          referenced = 0
+          found = 0
+          for item in plan:
+              summary = summarise_document_templates(raw_xochitl=source, uuid=item.uuid, inventory=inventory)
+              if not summary.references:
+                  continue
+              referenced += 1
+              if not summary.missing:
+                  found += 1
+              visible = '/'.join(item.visible_path)
+              lines.append(f'document={visible} uuid={item.uuid}')
+              lines.append(f'document_template_summary={summary.message}')
+              page_files = find_rm_page_files(source, item.uuid)
+              lines.append(f'document_page_count={len(page_files)}')
+              for page_file in page_files[:3]:
+                  out_svg = svg_root / f'{item.uuid}-{page_file.stem}.svg'
+                  completed = subprocess.run(
+                      ['rmc', '-t', 'svg', '-o', str(out_svg), str(page_file)],
+                      check=False,
+                      text=True,
+                      capture_output=True,
+                  )
+                  lines.append(f'page={page_file.name} rmc_returncode={completed.returncode}')
+                  if out_svg.exists():
+                      text = out_svg.read_text(encoding='utf-8', errors='replace')
+                      lines.append(f'page={page_file.name} svg_bytes={len(text.encode("utf-8"))}')
+                      lines.append(f'page={page_file.name} svg_line_count={text.count(chr(10)) + 1}')
+                      lines.append(f'page={page_file.name} svg_path_count={text.count("<path")}')
+                      lines.append(f'page={page_file.name} svg_rect_count={text.count("<rect")}')
+                      lines.append(f'page={page_file.name} svg_line_element_count={text.count("<line")}')
+                      try:
+                          root_el = ET.fromstring(text)
+                          lines.append(f'page={page_file.name} svg_xml=well_formed root={root_el.tag}')
+                      except ET.ParseError as exc:
+                          lines.append(f'page={page_file.name} svg_xml=malformed error={exc}')
+                  if completed.stderr.strip():
+                      lines.append(f'page={page_file.name} rmc_stderr={completed.stderr.strip()}')
+              probed += 1
+
+          lines.append(f'documents_with_detected_template_refs={referenced}')
+          lines.append(f'documents_with_found_template_refs={found}')
+          lines.append(f'documents_probed={probed}')
+          lines.append('interpretation=If pages with found template refs have only handwriting-sized SVG content and no repeated background primitives, rmc likely does not render templates. Exact visual confirmation still requires a known form/template test page.')
+          summary_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(summary_path.read_text(encoding='utf-8'))
+          PY
+
+      - name: Upload template render probe summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-render-probe-summary
+          path: /home/k11-user/rm2-backup-dev/reports/template-render-probe/template-render-probe-summary.txt
+          if-no-files-found: error
