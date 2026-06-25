@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 45
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+      VALIDATION_RUN: raw-copy-awake-rm2
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
