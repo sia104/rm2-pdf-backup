@@ -2,17 +2,14 @@ name: RPI dev run-local
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ".github/workflows/rpi-dev-run-local.yml"
-      - "src/rm2_backup/**"
-      - "tests/**"
-      - "docs/run-local-rpi-test.md"
+
+permissions:
+  contents: read
 
 jobs:
   run-local:
     name: Run local pipeline against copied RM2 data
-    runs-on: self-hosted
+    runs-on: [self-hosted, rpi, rm2, dev]
     timeout-minutes: 30
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev

@@ -3,6 +3,9 @@ name: RM2 SSH smoke test
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   rm2-ssh-test:
     runs-on: [self-hosted, rpi, rm2, dev]

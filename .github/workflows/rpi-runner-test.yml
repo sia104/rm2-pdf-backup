@@ -3,6 +3,9 @@ name: RPi runner test
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test-rpi:
     runs-on: [self-hosted, rpi, rm2, dev]

@@ -7,16 +7,14 @@ on:
       - main
     paths:
       - ".github/workflows/rpi-dev-raw-copy.yml"
-  pull_request:
-    paths:
-      - ".github/workflows/rpi-dev-raw-copy.yml"
-      - "src/rm2_backup/**"
-      - "tests/**"
+
+permissions:
+  contents: read
 
 jobs:
   raw-copy:
     name: Read-only raw copy from test RM2 then run local pipeline
-    runs-on: self-hosted
+    runs-on: [self-hosted, rpi, rm2, dev]
     timeout-minutes: 45
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
