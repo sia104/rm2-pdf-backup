@@ -1,4 +1,5 @@
 from rm2_backup.runner import PipelineEvent, PipelineResult, _write_run_report
+from rm2_backup.templates import TemplateProvenance
 
 
 def test_pipeline_result_tracks_published_count() -> None:
@@ -24,13 +25,19 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
                 visible_path=("Folder", "Notebook"),
                 output_relative_path="Folder/Notebook.pdf",
                 status="ok",
+                template_provenance=TemplateProvenance(
+                    referenced=("DIAD_Form",),
+                    missing=(),
+                    file_count=3,
+                    has_templates_json=True,
+                ),
             ),
             PipelineEvent(
                 uuid="bad-doc",
                 visible_path=("Broken",),
                 output_relative_path="Broken.pdf",
                 status="failed",
-                message="renderer error\nwith detail",
+                message="renderer error with detail",
             ),
         ],
     )
@@ -40,4 +47,6 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
     assert "published: 1" in text
     assert "- ok: Folder/Notebook" in text
     assert "- failed: Broken" in text
+    assert "templates: files=3 templates_json=True referenced=1 missing=0" in text
+    assert "template_references: DIAD_Form" in text
     assert "message: renderer error with detail" in text
