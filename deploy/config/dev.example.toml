@@ -1,0 +1,16 @@
+[rm2]
+host = "rm2"
+user = "root"
+port = 22
+
+[paths]
+backup_root = "/home/k11-user/rm2-backup-dev"
+raw_current = "/home/k11-user/rm2-backup-dev/raw/current"
+pdf_current = "/home/k11-user/rm2-backup-dev/pdf/current"
+staging = "/home/k11-user/rm2-backup-dev/staging"
+database = "/home/k11-user/rm2-backup-dev/db/rm2-backup.sqlite"
+reports = "/home/k11-user/rm2-backup-dev/reports"
+logs = "/home/k11-user/rm2-backup-dev/logs"
+
+[renderer]
+mode = "rmc-svg"
