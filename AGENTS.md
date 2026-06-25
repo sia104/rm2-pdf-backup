@@ -6,6 +6,56 @@ These instructions apply to all automated coding agents working in this reposito
 
 Build a safe, one-way Raspberry Pi service that backs up a reMarkable 2 over SSH, reconstructs the visible folder structure, renders notebooks/documents to multi-page PDFs locally on the Raspberry Pi, and publishes a validated PDF mirror.
 
+## Agent-led development workflow
+
+This repository is intended to be developed using an AI project-manager / AI developer / GitHub runner model.
+
+The agent should normally work issue-by-issue and pull-request-by-pull-request.
+
+For each development task:
+
+1. Inspect `README.md`, `AGENTS.md`, `SPEC.md`, `TEST_PLAN.md`, existing issues, existing pull requests and relevant workflows before editing.
+2. If no suitable issue exists, create a focused GitHub issue with:
+   - goal;
+   - scope;
+   - non-goals;
+   - acceptance criteria;
+   - test plan;
+   - safety/risk notes.
+3. Create a branch from `main`.
+4. Make the smallest safe change that satisfies the issue.
+5. Add or update tests.
+6. Run local checks where possible:
+   - `ruff check .`
+   - `pytest`
+   - targeted tests relevant to the change.
+7. Commit with a clear message.
+8. Push the branch.
+9. Open a draft pull request.
+10. In the PR body, include:
+    - summary;
+    - issue link;
+    - tests run;
+    - whether cloud CI passed;
+    - whether RPI/self-hosted hardware validation is required;
+    - risk level;
+    - remaining limitations.
+
+The agent must not make broad unrelated changes, combine unrelated features, or silently change safety behaviour.
+
+If hardware validation is required, prefer GitHub Actions on the Raspberry Pi self-hosted runner. Do not SSH, SCP, or rsync to the RM2 directly from a developer Mac.
+
+The agent should stop and ask for human approval before:
+
+- touching production or beamline RM2 configuration;
+- adding systemd services/timers;
+- changing deletion/archive behaviour;
+- changing raw backup retention behaviour;
+- introducing secrets, credentials, IP-specific configuration or private data;
+- weakening validation, publication, or safety checks;
+- running destructive commands;
+- making changes outside this repository.
+
 ## Hard safety rules
 
 1. Never write to the RM2.
