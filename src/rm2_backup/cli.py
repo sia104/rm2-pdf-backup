@@ -34,7 +34,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         result = run_local(app_config)
         print(
             "planned={0.planned} completed={0.completed} skipped={0.skipped} "
-            "failed={0.failed} published={0.published}".format(result)
+            "failed={0.failed} published={0.published} report={0.report_path}".format(result)
         )
         return
 
