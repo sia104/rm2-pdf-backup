@@ -14,6 +14,7 @@ from rm2_backup.renderers.base import Renderer
 from rm2_backup.renderers.external import ExternalCommandRenderer
 from rm2_backup.renderers.null import PlaceholderRenderer
 from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
+from rm2_backup.renderers.rmc_svg_template import TemplateRmcSvgRenderer
 from rm2_backup.templates import build_template_inventory, summarise_document_templates
 from rm2_backup.tree import build_visible_tree
 from rm2_backup.validate import validate_pdf
@@ -150,6 +151,8 @@ def _renderer_from_config(config: AppConfig) -> Renderer:
             raise ValueError("External renderer mode requires a command")
         return ExternalCommandRenderer(config.renderer.command)
     if config.renderer.mode == "rmc-svg":
+        if config.renderer.include_templates:
+            return TemplateRmcSvgRenderer(compose_command=config.renderer.command)
         return RmcSvgRenderer(compose_command=config.renderer.command)
     raise ValueError(f"Unsupported renderer mode: {config.renderer.mode}")
 
