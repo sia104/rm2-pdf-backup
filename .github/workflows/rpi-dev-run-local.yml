@@ -47,6 +47,7 @@ jobs:
           database = work / 'run-local.sqlite'
           config_path = work / 'app-config.toml'
           summary_path = work / 'run-local-summary.txt'
+          report_path = work / 'run-local-report.txt'
           work.mkdir(parents=True, exist_ok=True)
           staging.mkdir(parents=True, exist_ok=True)
           pdf_current.mkdir(parents=True, exist_ok=True)
@@ -100,6 +101,14 @@ jobs:
           for pdf in staged_pdfs[:20]:
               lines.append(f'staged_pdf={pdf} size={pdf.stat().st_size}')
 
+          if report_path.exists():
+              lines.append(f'run_report={report_path}')
+              for report_line in report_path.read_text(encoding='utf-8').splitlines():
+                  if report_line.startswith('templates_file_count:') or 'template_refs=' in report_line:
+                      lines.append(f'report_line={report_line}')
+          else:
+              lines.append('run_report=missing')
+
           if database.exists():
               with sqlite3.connect(database) as con:
                   try:
@@ -130,3 +139,11 @@ jobs:
           name: run-local-summary
           path: /home/k11-user/rm2-backup-dev/reports/run-local/run-local-summary.txt
           if-no-files-found: error
+
+      - name: Upload run-local report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-local-report
+          path: /home/k11-user/rm2-backup-dev/reports/run-local/run-local-report.txt
+          if-no-files-found: warn
