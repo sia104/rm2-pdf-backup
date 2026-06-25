@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import xml.etree.ElementTree as ET
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,16 +32,28 @@ class SvgPageResult:
         return self.svg_path.exists() and self.svg_path.stat().st_size > 0
 
     @property
-    def is_clean(self) -> bool:
-        """Return whether rmc exited cleanly and produced SVG output."""
+    def is_well_formed_svg(self) -> bool:
+        """Return whether the SVG is parseable XML."""
 
-        return self.return_code == 0 and self.has_svg
+        if not self.has_svg:
+            return False
+        try:
+            root = ET.parse(self.svg_path).getroot()
+        except (ET.ParseError, OSError, UnicodeDecodeError):
+            return False
+        return root.tag.endswith("svg")
+
+    @property
+    def is_clean(self) -> bool:
+        """Return whether rmc exited cleanly and produced parseable SVG output."""
+
+        return self.return_code == 0 and self.is_well_formed_svg
 
     @property
     def is_usable(self) -> bool:
-        """Return whether the SVG is usable despite a non-zero exit."""
+        """Return whether the SVG is suitable for PDF composition."""
 
-        return self.has_svg
+        return self.is_well_formed_svg
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,12 +68,20 @@ class SvgRenderSummary:
         return len(self.page_results)
 
     @property
+    def non_empty_pages(self) -> int:
+        return sum(1 for result in self.page_results if result.has_svg)
+
+    @property
     def usable_pages(self) -> int:
         return sum(1 for result in self.page_results if result.is_usable)
 
     @property
     def clean_pages(self) -> int:
         return sum(1 for result in self.page_results if result.is_clean)
+
+    @property
+    def malformed_pages(self) -> int:
+        return sum(1 for result in self.page_results if result.has_svg and not result.is_well_formed_svg)
 
     @property
     def ok_for_composition(self) -> bool:
@@ -76,9 +97,9 @@ class SvgRenderSummary:
 class RmcSvgRenderer:
     """Render RM page files to SVG using rmc.
 
-    The renderer treats non-empty SVG output as usable even when rmc returns a
-    non-zero exit code. This handles the observed behaviour where some pages
-    render usable SVG while rmc reports unsupported palette values.
+    The renderer treats only XML-well-formed SVG as usable. This is stricter than
+    checking file size because rmc can produce truncated non-empty SVG files when
+    it exits with unsupported palette values.
     """
 
     def __init__(
@@ -222,5 +243,7 @@ def _compose_argv(command: str, page_results: Sequence[SvgPageResult], output: P
 def _summary_error(summary: SvgRenderSummary) -> str:
     return (
         f"rmc SVG render incomplete for {summary.uuid}: "
-        f"usable={summary.usable_pages}/{summary.total_pages}, clean={summary.clean_pages}"
+        f"usable={summary.usable_pages}/{summary.total_pages}, "
+        f"non_empty={summary.non_empty_pages}, malformed={summary.malformed_pages}, "
+        f"clean={summary.clean_pages}"
     )
