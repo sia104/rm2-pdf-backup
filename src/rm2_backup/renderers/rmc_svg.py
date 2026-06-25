@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import subprocess
+import xml.etree.ElementTree as ET
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from rm2_backup.pdf_compose import PdfCompositionError, compose_svg_pages_to_pdf
 from rm2_backup.render_queue import RenderPlanItem
 from rm2_backup.renderers.base import RenderResult
 
@@ -30,16 +32,28 @@ class SvgPageResult:
         return self.svg_path.exists() and self.svg_path.stat().st_size > 0
 
     @property
-    def is_clean(self) -> bool:
-        """Return whether rmc exited cleanly and produced SVG output."""
+    def is_well_formed_svg(self) -> bool:
+        """Return whether the SVG is parseable XML."""
 
-        return self.return_code == 0 and self.has_svg
+        if not self.has_svg:
+            return False
+        try:
+            root = ET.parse(self.svg_path).getroot()
+        except (ET.ParseError, OSError, UnicodeDecodeError):
+            return False
+        return root.tag.endswith("svg")
+
+    @property
+    def is_clean(self) -> bool:
+        """Return whether rmc exited cleanly and produced parseable SVG output."""
+
+        return self.return_code == 0 and self.is_well_formed_svg
 
     @property
     def is_usable(self) -> bool:
-        """Return whether the SVG is usable despite a non-zero exit."""
+        """Return whether the SVG is suitable for PDF composition."""
 
-        return self.has_svg
+        return self.is_well_formed_svg
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +68,10 @@ class SvgRenderSummary:
         return len(self.page_results)
 
     @property
+    def non_empty_pages(self) -> int:
+        return sum(1 for result in self.page_results if result.has_svg)
+
+    @property
     def usable_pages(self) -> int:
         return sum(1 for result in self.page_results if result.is_usable)
 
@@ -62,16 +80,26 @@ class SvgRenderSummary:
         return sum(1 for result in self.page_results if result.is_clean)
 
     @property
+    def malformed_pages(self) -> int:
+        return sum(1 for result in self.page_results if result.has_svg and not result.is_well_formed_svg)
+
+    @property
     def ok_for_composition(self) -> bool:
         return self.total_pages > 0 and self.usable_pages == self.total_pages
+
+    @property
+    def usable_svg_paths(self) -> tuple[Path, ...]:
+        """Return usable SVG paths in page order."""
+
+        return tuple(result.svg_path for result in self.page_results if result.is_usable)
 
 
 class RmcSvgRenderer:
     """Render RM page files to SVG using rmc.
 
-    The renderer treats non-empty SVG output as usable even when rmc returns a
-    non-zero exit code. This handles the current observed behaviour where some
-    pages render usable SVG while rmc reports unsupported palette values.
+    The renderer treats only XML-well-formed SVG as usable. This is stricter than
+    checking file size because rmc can produce truncated non-empty SVG files when
+    it exits with unsupported palette values.
     """
 
     def __init__(
@@ -110,7 +138,7 @@ class RmcSvgRenderer:
         return SvgRenderSummary(uuid=item.uuid, page_results=tuple(results))
 
     def render(self, item: RenderPlanItem, *, raw_xochitl: Path, staging_pdf: Path) -> RenderResult:
-        """Render SVG pages and optionally compose them into a PDF."""
+        """Render SVG pages and compose them into a PDF."""
 
         work_dir = staging_pdf.parent / f"{staging_pdf.stem}-svg"
         summary = self.render_svg_pages(item, raw_xochitl=raw_xochitl, work_dir=work_dir)
@@ -121,26 +149,20 @@ class RmcSvgRenderer:
                 output_path=None,
                 error=_summary_error(summary),
             )
-        if self.compose_command is None:
-            return RenderResult(
-                uuid=item.uuid,
-                ok=False,
-                output_path=None,
-                error="SVG pages rendered, but PDF composition is not configured",
+
+        if self.compose_command is not None:
+            return _run_external_composer(
+                item=item,
+                page_results=summary.page_results,
+                output_pdf=staging_pdf,
+                command=self.compose_command,
+                runner=self.runner,
             )
-        completed = self.runner(
-            _compose_argv(self.compose_command, summary.page_results, staging_pdf),
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-        if completed.returncode != 0 or not staging_pdf.exists() or staging_pdf.stat().st_size == 0:
-            return RenderResult(
-                uuid=item.uuid,
-                ok=False,
-                output_path=None,
-                error=completed.stderr or completed.stdout or "PDF composition failed",
-            )
+
+        try:
+            compose_svg_pages_to_pdf(summary.usable_svg_paths, staging_pdf)
+        except PdfCompositionError as exc:
+            return RenderResult(uuid=item.uuid, ok=False, output_path=None, error=str(exc))
         return RenderResult(uuid=item.uuid, ok=True, output_path=staging_pdf)
 
 
@@ -189,6 +211,30 @@ def _ordered_pages_from_content(raw_xochitl: Path, uuid: str) -> tuple[Path, ...
     return tuple(found)
 
 
+def _run_external_composer(
+    *,
+    item: RenderPlanItem,
+    page_results: Sequence[SvgPageResult],
+    output_pdf: Path,
+    command: str,
+    runner: Runner,
+) -> RenderResult:
+    completed = runner(
+        _compose_argv(command, page_results, output_pdf),
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if completed.returncode != 0 or not output_pdf.exists() or output_pdf.stat().st_size == 0:
+        return RenderResult(
+            uuid=item.uuid,
+            ok=False,
+            output_path=None,
+            error=completed.stderr or completed.stdout or "PDF composition failed",
+        )
+    return RenderResult(uuid=item.uuid, ok=True, output_path=output_pdf)
+
+
 def _compose_argv(command: str, page_results: Sequence[SvgPageResult], output: Path) -> list[str]:
     svg_inputs = " ".join(str(result.svg_path) for result in page_results)
     return command.format(input_svgs=svg_inputs, output=str(output)).split()
@@ -197,5 +243,7 @@ def _compose_argv(command: str, page_results: Sequence[SvgPageResult], output: P
 def _summary_error(summary: SvgRenderSummary) -> str:
     return (
         f"rmc SVG render incomplete for {summary.uuid}: "
-        f"usable={summary.usable_pages}/{summary.total_pages}, clean={summary.clean_pages}"
+        f"usable={summary.usable_pages}/{summary.total_pages}, "
+        f"non_empty={summary.non_empty_pages}, malformed={summary.malformed_pages}, "
+        f"clean={summary.clean_pages}"
     )
