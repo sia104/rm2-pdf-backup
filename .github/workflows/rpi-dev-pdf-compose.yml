@@ -54,6 +54,8 @@ jobs:
               pages = sorted(raw.rglob('*.rm')) if raw.exists() else []
               renderer = RmcSvgRenderer()
               svg_paths = []
+              non_empty_pages = 0
+              malformed_pages = 0
               lines.append(f'rm_page_files={len(pages)}')
               for index, page in enumerate(pages, start=1):
                   item = RenderPlanItem(page.stem, page.stem, (page.stem,), PurePosixPath(f'{page.stem}.pdf'))
@@ -61,13 +63,20 @@ jobs:
                   page_result = result.page_results[0] if result.page_results else None
                   size = page_result.svg_path.stat().st_size if page_result and page_result.svg_path.exists() else 0
                   code = page_result.return_code if page_result else 'missing'
+                  well_formed = bool(page_result and page_result.is_well_formed_svg)
+                  if page_result and page_result.has_svg:
+                      non_empty_pages += 1
+                  if page_result and page_result.has_svg and not well_formed:
+                      malformed_pages += 1
                   first_err = ''
                   if page_result and page_result.stderr:
                       first_err = page_result.stderr.splitlines()[0]
-                  lines.append(f'page_{index:03d}_exit={code} size={size} file={page.name} stderr={first_err}')
+                  lines.append(f'page_{index:03d}_exit={code} size={size} well_formed={well_formed} file={page.name} stderr={first_err}')
                   if page_result and page_result.is_usable:
                       svg_paths.append(page_result.svg_path)
-              lines.append(f'usable_svg_pages={len(svg_paths)}')
+              lines.append(f'non_empty_svg_pages={non_empty_pages}')
+              lines.append(f'well_formed_svg_pages={len(svg_paths)}')
+              lines.append(f'malformed_svg_pages={malformed_pages}')
               if svg_paths:
                   compose_svg_pages_to_pdf(tuple(svg_paths), output_pdf)
                   validation = validate_pdf(output_pdf)
@@ -79,7 +88,7 @@ jobs:
                       exit_code = 1
               else:
                   lines.append('pdf_valid=false')
-                  lines.append('pdf_reason=no usable SVG pages')
+                  lines.append('pdf_reason=no well-formed SVG pages')
                   exit_code = 1
           except Exception as exc:
               lines.append(f'exception_type={type(exc).__name__}')
