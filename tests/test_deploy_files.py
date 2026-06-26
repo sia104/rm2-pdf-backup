@@ -19,6 +19,30 @@ def test_dev_config_example_uses_rmc_svg_renderer() -> None:
     assert '/srv/rm2-backup' not in config
 
 
+def test_production_config_example_uses_placeholders_only() -> None:
+    config = Path("deploy/config/production.example.toml").read_text(encoding="utf-8")
+
+    assert "PRODUCTION_RM2_HOST_OR_ALIAS" in config
+    assert "192." not in config
+    assert "10." not in config
+    assert "172." not in config
+    assert "ssh_key" not in config
+    assert "password" not in config.lower()
+    assert "token" not in config.lower()
+    assert "/srv/rm2-backup" in config
+    assert 'mode = "rmc-svg"' in config
+
+
+def test_mvp_production_deployment_doc_keeps_manual_gates() -> None:
+    doc = Path("docs/mvp-production-deployment.md").read_text(encoding="utf-8")
+
+    assert "Do not run SSH, SCP, or rsync to the RM2 from a developer Mac" in doc
+    assert "Stop if any gate fails" in doc
+    assert "Do not commit the edited production config" in doc
+    assert "must not include `--delete`" in doc
+    assert "Production timer is enabled only after" in doc
+
+
 def test_rpi_dev_systemd_validation_workflow_is_manual_only() -> None:
     workflow = Path(".github/workflows/rpi-dev-systemd-validate.yml").read_text(
         encoding="utf-8"
