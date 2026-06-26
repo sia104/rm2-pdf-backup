@@ -72,6 +72,55 @@ def test_render_svg_pages_rejects_truncated_svg(tmp_path: Path) -> None:
     assert not summary.ok_for_composition
 
 
+def test_render_reports_no_rm_pages_category(tmp_path: Path) -> None:
+    renderer = RmcSvgRenderer()
+
+    result = renderer.render(_item(), raw_xochitl=tmp_path / "raw", staging_pdf=tmp_path / "out.pdf")
+
+    assert not result.ok
+    assert result.output_path is None
+    assert result.error is not None
+    assert "category=no_rm_pages" in result.error
+
+
+def test_render_reports_malformed_svg_category(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    doc_dir = raw / "doc"
+    doc_dir.mkdir(parents=True)
+    (doc_dir / "page.rm").write_bytes(b"rm")
+
+    def fake_runner(argv, **kwargs):
+        svg_path = Path(argv[4])
+        svg_path.write_text("<svg>", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="KeyError: 9")
+
+    renderer = RmcSvgRenderer(runner=fake_runner)
+    result = renderer.render(_item(), raw_xochitl=raw, staging_pdf=tmp_path / "out.pdf")
+
+    assert not result.ok
+    assert result.output_path is None
+    assert result.error is not None
+    assert "category=malformed_svg" in result.error
+
+
+def test_render_reports_no_svg_output_category(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    doc_dir = raw / "doc"
+    doc_dir.mkdir(parents=True)
+    (doc_dir / "page.rm").write_bytes(b"rm")
+
+    def fake_runner(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="unsupported")
+
+    renderer = RmcSvgRenderer(runner=fake_runner)
+    result = renderer.render(_item(), raw_xochitl=raw, staging_pdf=tmp_path / "out.pdf")
+
+    assert not result.ok
+    assert result.output_path is None
+    assert result.error is not None
+    assert "category=no_svg_output" in result.error
+
+
 def test_render_reports_pdf_composition_failure_after_svg_success(tmp_path: Path) -> None:
     raw = tmp_path / "raw"
     doc_dir = raw / "doc"

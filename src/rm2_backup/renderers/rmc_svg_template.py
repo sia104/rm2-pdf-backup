@@ -7,7 +7,7 @@ from pathlib import Path
 from rm2_backup.pdf_compose import PdfCompositionError, compose_svg_pages_to_pdf
 from rm2_backup.render_queue import RenderPlanItem
 from rm2_backup.renderers.base import RenderResult
-from rm2_backup.renderers.rmc_svg import RmcSvgRenderer, SvgRenderSummary
+from rm2_backup.renderers.rmc_svg import RmcSvgRenderer, summary_failure_message
 from rm2_backup.template_compose import compose_svg_template_background, resolve_template_file
 from rm2_backup.templates import build_template_inventory, summarise_document_templates
 
@@ -19,7 +19,12 @@ class TemplateRmcSvgRenderer(RmcSvgRenderer):
         work_dir = staging_pdf.parent / f"{staging_pdf.stem}-svg"
         summary = self.render_svg_pages(item, raw_xochitl=raw_xochitl, work_dir=work_dir)
         if not summary.ok_for_composition:
-            return RenderResult(uuid=item.uuid, ok=False, output_path=None, error=_summary_error(summary))
+            return RenderResult(
+                uuid=item.uuid,
+                ok=False,
+                output_path=None,
+                error=summary_failure_message(summary),
+            )
 
         svg_paths = add_template_backgrounds(
             raw_xochitl=raw_xochitl,
@@ -61,14 +66,3 @@ def add_template_backgrounds(
             return svg_paths
         output_paths.append(output_svg)
     return tuple(output_paths)
-
-
-def _summary_error(summary: SvgRenderSummary) -> str:
-    parts = [
-        f"rmc-svg incomplete: total={summary.total_pages}",
-        f"usable={summary.usable_pages}",
-        f"non_empty={summary.non_empty_pages}",
-        f"malformed={summary.malformed_pages}",
-        f"clean={summary.clean_pages}",
-    ]
-    return "; ".join(parts)
