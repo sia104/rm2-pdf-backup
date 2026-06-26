@@ -2,17 +2,14 @@ name: RPI dev PDF composition
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ".github/workflows/rpi-dev-pdf-compose.yml"
-      - "src/rm2_backup/pdf_compose.py"
-      - "src/rm2_backup/renderers/rmc_svg.py"
-      - "tests/test_composition.py"
+
+permissions:
+  contents: read
 
 jobs:
   pdf-compose:
     name: Compose copied RM pages into a test PDF
-    runs-on: self-hosted
+    runs-on: [self-hosted, rpi, rm2, dev]
     timeout-minutes: 30
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev

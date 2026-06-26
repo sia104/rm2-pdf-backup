@@ -2,16 +2,14 @@ name: RPI dev template render probe
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ".github/workflows/rpi-dev-template-render-probe.yml"
-      - "src/rm2_backup/**"
-      - "tests/**"
+
+permissions:
+  contents: read
 
 jobs:
   template-probe:
     name: Probe template rendering evidence
-    runs-on: self-hosted
+    runs-on: [self-hosted, rpi, rm2, dev]
     timeout-minutes: 30
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev

@@ -3,10 +3,13 @@ name: RPI dev renderer probe
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   renderer-probe:
     name: Diagnose rmc renderer against copied spare RM2 data
-    runs-on: self-hosted
+    runs-on: [self-hosted, rpi, rm2, dev]
     timeout-minutes: 25
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
