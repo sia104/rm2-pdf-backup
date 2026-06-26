@@ -1,0 +1,65 @@
+name: RPI dev systemd validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-dev-systemd:
+    name: Validate dev systemd templates
+    runs-on: [self-hosted, rpi, rm2, dev]
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate dev-only service and timer templates
+        run: |
+          set -Eeuo pipefail
+          service="deploy/systemd/rm2-backup-dev.service"
+          timer="deploy/systemd/rm2-backup-dev.timer"
+          config="deploy/config/dev.example.toml"
+          summary="${RUNNER_TEMP:-/tmp}/rpi-dev-systemd-validation.txt"
+          : > "$summary"
+
+          log() {
+            echo "$*" | tee -a "$summary"
+          }
+
+          log "validation=rpi-dev-systemd"
+          log "service=$service"
+          log "timer=$timer"
+          log "config=$config"
+
+          test -f "$service"
+          test -f "$timer"
+          test -f "$config"
+
+          grep -q "rm2-backup run-local" "$service"
+          grep -q "/home/k11-user/rm2-backup-dev" "$service"
+          grep -q "/home/k11-user/rm2-backup-dev" "$config"
+          grep -q "rm2-backup-dev.service" "$timer"
+
+          ! grep -Eq "(ssh|scp|rsync)" "$service"
+          ! grep -q "/srv/rm2-backup" "$service"
+          ! grep -q "/srv/rm2-backup" "$config"
+          ! grep -q "WantedBy=multi-user.target" "$service"
+
+          if command -v systemd-analyze >/dev/null 2>&1; then
+            systemd-analyze verify "$service" "$timer" 2>&1 | tee -a "$summary"
+            log "systemd_analyze=ok"
+          else
+            log "systemd_analyze=missing"
+          fi
+
+          log "result=ok"
+
+      - name: Upload validation summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpi-dev-systemd-validation
+          path: ${{ runner.temp }}/rpi-dev-systemd-validation.txt
+          if-no-files-found: error
