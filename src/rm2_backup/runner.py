@@ -129,6 +129,7 @@ def run_local(config: AppConfig) -> PipelineResult:
         skipped=skipped,
         failed=failed,
         published=published,
+        renderer_mode=config.renderer.mode,
         template_count=template_inventory.count,
         events=events,
     )
@@ -190,6 +191,7 @@ def _write_run_report(
     skipped: int,
     failed: int,
     published: int,
+    renderer_mode: str | None = None,
     template_count: int | None = None,
     events: list[PipelineEvent],
 ) -> Path:
@@ -203,6 +205,8 @@ def _write_run_report(
         f"failed: {failed}",
         f"published: {published}",
     ]
+    if renderer_mode is not None:
+        lines.append(f"renderer: {renderer_mode}")
     if template_count is not None:
         lines.append(f"templates_file_count: {template_count}")
     lines.extend(["", "Documents"])
