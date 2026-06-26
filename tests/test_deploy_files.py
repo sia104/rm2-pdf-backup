@@ -40,7 +40,32 @@ def test_mvp_production_deployment_doc_keeps_manual_gates() -> None:
     assert "Stop if any gate fails" in doc
     assert "Do not commit the edited production config" in doc
     assert "must not include `--delete`" in doc
+    assert "rm2-backup sync-plan --config /etc/rm2-backup/config.toml" in doc
+    assert "rm2-backup plan-sync" not in doc
     assert "Production timer is enabled only after" in doc
+
+
+def test_install_config_run_doc_covers_safe_operator_path() -> None:
+    doc = Path("docs/install-config-run.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "docs/install-config-run.md" in readme
+    assert "Do not run SSH, SCP, or rsync to the RM2 from a developer Mac" in doc
+    assert "rm2-backup plan --metadata-dir tests/fixtures/synthetic_xochitl" in doc
+    assert "rm2-backup sync-plan --config config.local.toml" in doc
+    assert "rm2-backup run-local --config config.local.toml" in doc
+    assert "git clone https://github.com/sia104/rm2-pdf-backup.git" in doc
+    assert "sudo mkdir -p /srv/rm2-backup-test/raw/current" in doc
+    assert "sudo mkdir -p /etc/rm2-backup-test" in doc
+    assert "rm2-backup sync-plan --config /etc/rm2-backup-test/config.toml" in doc
+    assert "rm2-backup run-local --config /etc/rm2-backup-test/config.toml" in doc
+    assert "deploy/config/dev.example.toml" in doc
+    assert "deploy/config/production.example.toml" in doc
+    assert "docs/mvp-production-deployment.md" in doc
+    assert "Production-like rehearsal with the spare RM2" in doc
+    assert "Use `/srv/rm2-backup` only for the real production profile" in doc
+    assert "It must not include `--delete`" in doc
+    assert "Do not commit edited local or production config files" in doc
 
 
 def test_rpi_dev_systemd_validation_workflow_is_manual_only() -> None:

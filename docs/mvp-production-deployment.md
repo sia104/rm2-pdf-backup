@@ -60,7 +60,7 @@ The committed example intentionally contains:
 On the Raspberry Pi only:
 
 ```bash
-rm2-backup plan-sync --config /etc/rm2-backup/config.toml
+rm2-backup sync-plan --config /etc/rm2-backup/config.toml
 ```
 
 Review the planned commands. They must be pull-only `rsync` commands from the RM2 to Raspberry Pi storage and must not include `--delete`.
