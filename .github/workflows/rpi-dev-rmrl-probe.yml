@@ -2,14 +2,14 @@ name: RPI dev rmrl probe
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ".github/workflows/rpi-dev-rmrl-probe.yml"
+
+permissions:
+  contents: read
 
 jobs:
   rmrl-probe:
     name: Probe rmrl renderer availability
-    runs-on: self-hosted
+    runs-on: [self-hosted, rpi, rm2, dev]
     timeout-minutes: 20
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev

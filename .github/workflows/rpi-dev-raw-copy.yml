@@ -2,19 +2,23 @@ name: RPI dev raw copy and run-local
 
 on:
   workflow_dispatch:
-  pull_request:
+  push:
+    branches:
+      - main
     paths:
       - ".github/workflows/rpi-dev-raw-copy.yml"
-      - "src/rm2_backup/**"
-      - "tests/**"
+
+permissions:
+  contents: read
 
 jobs:
   raw-copy:
     name: Read-only raw copy from test RM2 then run local pipeline
-    runs-on: self-hosted
+    runs-on: [self-hosted, rpi, rm2, dev]
     timeout-minutes: 45
     env:
       DEV_BACKUP_ROOT: /home/k11-user/rm2-backup-dev
+      VALIDATION_RUN: raw-copy-awake-rm2
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -38,7 +42,7 @@ jobs:
           import subprocess
 
           from rm2_backup.config import load_app_config
-          from rm2_backup.raw_sync import run_raw_sync, RawSyncError
+          from rm2_backup.raw_sync import plan_raw_sync
 
           root = Path(os.environ['DEV_BACKUP_ROOT'])
           raw_current = root / 'raw' / 'current'
@@ -80,20 +84,30 @@ jobs:
 
           lines = [f'config={config_path}', f'raw_current={raw_current}']
           config = load_app_config(config_path)
-          try:
-              sync_report = run_raw_sync(config)
-              lines.append('raw_sync=ok')
-              for result in sync_report.results:
-                  lines.append(f'sync_{result.label}_returncode={result.return_code}')
-                  if result.stdout.strip():
-                      lines.append(f'sync_{result.label}_stdout={result.stdout.strip()}')
-                  if result.stderr.strip():
-                      lines.append(f'sync_{result.label}_stderr={result.stderr.strip()}')
-          except RawSyncError as exc:
-              lines.append(f'raw_sync=failed {exc}')
+          sync_ok = True
+          for command in plan_raw_sync(config):
+              command.destination.mkdir(parents=True, exist_ok=True)
+              completed_sync = subprocess.run(
+                  command.argv,
+                  check=False,
+                  text=True,
+                  capture_output=True,
+              )
+              lines.append(f'sync_{command.label}_returncode={completed_sync.returncode}')
+              lines.append(f'sync_{command.label}_destination={command.destination}')
+              if completed_sync.stdout.strip():
+                  lines.append(f'sync_{command.label}_stdout={completed_sync.stdout.strip()}')
+              if completed_sync.stderr.strip():
+                  lines.append(f'sync_{command.label}_stderr={completed_sync.stderr.strip()}')
+              if completed_sync.returncode != 0:
+                  sync_ok = False
+
+          if not sync_ok:
+              lines.append('raw_sync=failed')
               summary_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
               print(summary_path.read_text(encoding='utf-8'))
               raise SystemExit(1)
+          lines.append('raw_sync=ok')
 
           completed = subprocess.run(
               ['rm2-backup', 'run-local', '--config', str(config_path)],

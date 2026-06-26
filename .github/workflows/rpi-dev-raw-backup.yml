@@ -3,10 +3,13 @@ name: RPI dev raw backup
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   raw-backup:
     name: Spare RM2 raw sync, metadata plan, and placeholder render
-    runs-on: self-hosted
+    runs-on: [self-hosted, rpi, rm2, dev]
     timeout-minutes: 25
     env:
       RM2_SSH_TARGET: rm2

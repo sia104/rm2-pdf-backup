@@ -52,6 +52,7 @@ class RendererConfig:
 
     mode: str = "placeholder"
     command: str | None = None
+    include_templates: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +115,7 @@ def parse_app_config(payload: dict[str, Any], *, base_dir: Path | None = None) -
     renderer = RendererConfig(
         mode=_optional_string(renderer_table, "mode", default="placeholder"),
         command=_optional_string_or_none(renderer_table, "command"),
+        include_templates=_optional_bool(renderer_table, "include_templates", default=False),
     )
     config = AppConfig(rm2=rm2, paths=paths, renderer=renderer)
     _validate_app_config(config)
@@ -162,6 +164,13 @@ def _optional_string_or_none(table: dict[str, Any], key: str) -> str | None:
     return value
 
 
+def _optional_bool(table: dict[str, Any], key: str, *, default: bool) -> bool:
+    value = table.get(key, default)
+    if not isinstance(value, bool):
+        raise ConfigError(f"Config value {key} must be true or false")
+    return value
+
+
 def _optional_int(table: dict[str, Any], key: str, *, default: int) -> int:
     value = table.get(key, default)
     if not isinstance(value, int) or value <= 0:
@@ -195,5 +204,7 @@ def _validate_app_config(config: AppConfig) -> None:
         raise ConfigError(f"Renderer mode must be one of {sorted(allowed_modes)}")
     if config.renderer.mode == "external" and config.renderer.command is None:
         raise ConfigError("External renderer mode requires [renderer].command")
+    if config.renderer.include_templates and config.renderer.mode != "rmc-svg":
+        raise ConfigError("Template composition currently requires renderer mode 'rmc-svg'")
     if config.paths.raw_current == config.paths.pdf_current:
         raise ConfigError("raw_current and pdf_current must be different paths")
