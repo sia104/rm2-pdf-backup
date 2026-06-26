@@ -1,0 +1,17 @@
+[rm2]
+host = "PRODUCTION_RM2_HOST_OR_ALIAS"
+user = "root"
+port = 22
+
+[paths]
+backup_root = "/srv/rm2-backup"
+raw_current = "/srv/rm2-backup/raw/current"
+pdf_current = "/srv/rm2-backup/pdf/current"
+staging = "/srv/rm2-backup/staging"
+database = "/srv/rm2-backup/db/rm2-backup.sqlite"
+reports = "/srv/rm2-backup/reports"
+logs = "/srv/rm2-backup/logs"
+
+[renderer]
+mode = "rmc-svg"
+include_templates = true
