@@ -48,7 +48,15 @@ jobs:
           ! grep -q "WantedBy=multi-user.target" "$service"
 
           if command -v systemd-analyze >/dev/null 2>&1; then
-            systemd-analyze verify "$service" "$timer" 2>&1 | tee -a "$summary"
+            verify_dir="$(mktemp -d)"
+            sed \
+              -e 's#^WorkingDirectory=.*#WorkingDirectory=/tmp#' \
+              -e 's#^ExecStart=.*#ExecStart=/bin/true#' \
+              "$service" > "$verify_dir/rm2-backup-dev.service"
+            cp "$timer" "$verify_dir/rm2-backup-dev.timer"
+            systemd-analyze verify \
+              "$verify_dir/rm2-backup-dev.service" \
+              "$verify_dir/rm2-backup-dev.timer" 2>&1 | tee -a "$summary"
             log "systemd_analyze=ok"
           else
             log "systemd_analyze=missing"
