@@ -17,3 +17,19 @@ def test_dev_config_example_uses_rmc_svg_renderer() -> None:
     assert 'mode = "rmc-svg"' in config
     assert '/home/k11-user/rm2-backup-dev' in config
     assert '/srv/rm2-backup' not in config
+
+
+def test_rpi_dev_systemd_validation_workflow_is_manual_only() -> None:
+    workflow = Path(".github/workflows/rpi-dev-systemd-validate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "workflow_dispatch:" in workflow
+    assert "pull_request:" not in workflow
+    assert "push:" not in workflow
+    assert "runs-on: [self-hosted, rpi, rm2, dev]" in workflow
+    assert "permissions:\n  contents: read" in workflow
+    assert "rm2-backup run-local" in workflow
+    assert "rsync " not in workflow
+    assert "scp " not in workflow
+    assert "ssh " not in workflow
