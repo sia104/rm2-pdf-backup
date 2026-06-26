@@ -1,0 +1,19 @@
+[Unit]
+Description=RM2 PDF backup dev run
+Documentation=https://github.com/sia104/rm2-pdf-backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=k11-user
+Group=k11-user
+WorkingDirectory=/home/k11-user/rm2-backup-dev/rm2-pdf-backup
+Environment=PATH=/home/k11-user/rm2-backup-dev/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/k11-user/rm2-backup-dev/venv/bin/rm2-backup run-local --config /home/k11-user/rm2-backup-dev/config/dev.toml
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# This dev service intentionally runs only the local pipeline. It does not SSH to
+# the RM2 by itself. Raw-copy testing remains a separate explicit diagnostic.
