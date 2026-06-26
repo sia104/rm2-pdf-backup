@@ -30,6 +30,7 @@ def test_rpi_dev_systemd_validation_workflow_is_manual_only() -> None:
     assert "runs-on: [self-hosted, rpi, rm2, dev]" in workflow
     assert "permissions:\n  contents: read" in workflow
     assert "rm2-backup run-local" in workflow
+    assert "ExecStart=/bin/true" in workflow
     assert "rsync " not in workflow
     assert "scp " not in workflow
     assert "ssh " not in workflow
