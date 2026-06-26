@@ -147,7 +147,7 @@ class RmcSvgRenderer:
                 uuid=item.uuid,
                 ok=False,
                 output_path=None,
-                error=_summary_error(summary),
+                error=summary_failure_message(summary),
             )
 
         if self.compose_command is not None:
@@ -240,10 +240,27 @@ def _compose_argv(command: str, page_results: Sequence[SvgPageResult], output: P
     return command.format(input_svgs=svg_inputs, output=str(output)).split()
 
 
-def _summary_error(summary: SvgRenderSummary) -> str:
+def summary_failure_message(summary: SvgRenderSummary) -> str:
+    """Return a concise, categorized message for an incomplete SVG render."""
+
+    category = _summary_failure_category(summary)
     return (
-        f"rmc SVG render incomplete for {summary.uuid}: "
+        f"rmc SVG render incomplete for {summary.uuid}: category={category}, "
         f"usable={summary.usable_pages}/{summary.total_pages}, "
         f"non_empty={summary.non_empty_pages}, malformed={summary.malformed_pages}, "
         f"clean={summary.clean_pages}"
     )
+
+
+def _summary_failure_category(summary: SvgRenderSummary) -> str:
+    if summary.total_pages == 0:
+        return "no_rm_pages"
+    if summary.usable_pages == 0 and summary.non_empty_pages == 0:
+        return "no_svg_output"
+    if summary.malformed_pages > 0:
+        return "malformed_svg"
+    if summary.usable_pages < summary.total_pages:
+        return "partial_svg_output"
+    if summary.clean_pages < summary.total_pages:
+        return "renderer_nonzero_exit"
+    return "unknown"
