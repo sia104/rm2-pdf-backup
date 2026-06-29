@@ -121,6 +121,25 @@ def test_render_reports_no_svg_output_category(tmp_path: Path) -> None:
     assert "category=no_svg_output" in result.error
 
 
+def test_render_reports_missing_rmc_executable_category(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    doc_dir = raw / "doc"
+    doc_dir.mkdir(parents=True)
+    (doc_dir / "page.rm").write_bytes(b"rm")
+
+    def fake_runner(argv, **kwargs):
+        raise FileNotFoundError("rmc")
+
+    renderer = RmcSvgRenderer(runner=fake_runner)
+    result = renderer.render(_item(), raw_xochitl=raw, staging_pdf=tmp_path / "out.pdf")
+
+    assert not result.ok
+    assert result.output_path is None
+    assert result.error is not None
+    assert "category=renderer_executable_not_found" in result.error
+    assert "usable=0/1" in result.error
+
+
 def test_render_reports_pdf_composition_failure_after_svg_success(tmp_path: Path) -> None:
     raw = tmp_path / "raw"
     doc_dir = raw / "doc"
