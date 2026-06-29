@@ -121,12 +121,23 @@ class RmcSvgRenderer:
         results: list[SvgPageResult] = []
         for index, page_path in enumerate(page_paths, start=1):
             svg_path = work_dir / f"{index:04d}-{page_path.stem}.svg"
-            completed = self.runner(
-                [self.executable, "-t", "svg", "-o", str(svg_path), str(page_path)],
-                check=False,
-                text=True,
-                capture_output=True,
-            )
+            try:
+                completed = self.runner(
+                    [self.executable, "-t", "svg", "-o", str(svg_path), str(page_path)],
+                    check=False,
+                    text=True,
+                    capture_output=True,
+                )
+            except FileNotFoundError:
+                results.append(
+                    SvgPageResult(
+                        page_path=page_path,
+                        svg_path=svg_path,
+                        return_code=127,
+                        stderr=f"renderer executable not found: {self.executable}",
+                    )
+                )
+                break
             results.append(
                 SvgPageResult(
                     page_path=page_path,
@@ -255,6 +266,8 @@ def summary_failure_message(summary: SvgRenderSummary) -> str:
 def _summary_failure_category(summary: SvgRenderSummary) -> str:
     if summary.total_pages == 0:
         return "no_rm_pages"
+    if any("renderer executable not found:" in result.stderr for result in summary.page_results):
+        return "renderer_executable_not_found"
     if summary.usable_pages == 0 and summary.non_empty_pages == 0:
         return "no_svg_output"
     if summary.malformed_pages > 0:

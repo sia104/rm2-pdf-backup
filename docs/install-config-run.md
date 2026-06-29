@@ -274,6 +274,18 @@ Supported modes are:
 
 Template composition currently requires `mode = "rmc-svg"`.
 
+`rmc-svg` requires an `rmc` executable on the Raspberry Pi `PATH`. Before using
+this renderer on the Raspberry Pi, verify:
+
+```bash
+command -v rmc
+rmc --help
+```
+
+If `rm2-backup run-local` reports `category=renderer_executable_not_found`,
+install or expose `rmc` on the Raspberry Pi and rerun the local pipeline. The
+backup raw copy should be left intact while fixing renderer installation.
+
 For production-like testing with the spare RM2, use:
 
 ```toml
