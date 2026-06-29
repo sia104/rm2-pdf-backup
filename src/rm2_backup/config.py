@@ -27,6 +27,7 @@ class Rm2Config:
     user: str = "root"
     ssh_key: Path | None = None
     port: int = 22
+    ssh_alias: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +103,7 @@ def parse_app_config(payload: dict[str, Any], *, base_dir: Path | None = None) -
         user=_optional_string(rm2_table, "user", default="root"),
         ssh_key=_optional_path(rm2_table, "ssh_key", base_dir=base_dir),
         port=_optional_int(rm2_table, "port", default=22),
+        ssh_alias=_optional_bool(rm2_table, "ssh_alias", default=False),
     )
     paths = PathsConfig(
         backup_root=_required_path(paths_table, "backup_root", base_dir),
@@ -208,3 +210,5 @@ def _validate_app_config(config: AppConfig) -> None:
         raise ConfigError("Template composition currently requires renderer mode 'rmc-svg'")
     if config.paths.raw_current == config.paths.pdf_current:
         raise ConfigError("raw_current and pdf_current must be different paths")
+    if config.rm2.ssh_alias and config.rm2.ssh_key is not None:
+        raise ConfigError("ssh_alias mode uses SSH config; do not set [rm2].ssh_key")

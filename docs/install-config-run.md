@@ -173,6 +173,7 @@ Example files:
 - `docs/app-config-example.toml` is a small application example using placeholder values.
 - `deploy/config/dev.example.toml` is for the spare/development RM2 profile on the Raspberry Pi.
 - `deploy/config/production.example.toml` is a production template with placeholders only.
+- `docs/rpi-ssh-access.md` explains passwordless SSH alias setup for unattended RPI runs.
 
 Copy examples to private local files before editing:
 
@@ -211,7 +212,17 @@ user = "root"
 port = 22
 ```
 
-`host` is resolved on the Raspberry Pi. Use a private local DNS name, hosts entry, or local-only value. For a production-like rehearsal, this must still identify the spare/test RM2. Do not commit a real production host or IP address.
+`host` is resolved on the Raspberry Pi. Use a private local DNS name, hosts entry, SSH alias, or local-only value. For a production-like rehearsal, this must still identify the spare/test RM2. Do not commit a real production host or IP address.
+
+For SSH alias mode, prefer:
+
+```toml
+[rm2]
+host = "rm2"
+ssh_alias = true
+```
+
+This makes raw sync use `rm2:/path` so the Raspberry Pi user's private `~/.ssh/config` controls the real host, user, port, and identity file. See `docs/rpi-ssh-access.md`.
 
 `user` should normally be `root` for RM2 SSH access.
 
@@ -228,6 +239,8 @@ ssh_key = "/PRIVATE/RPI/ONLY/PATH/TO/RM2_KEY"
 ```
 
 Do not commit the edited config, the key path, or the key.
+
+Do not set `user = ""`; empty user values are invalid. Use `ssh_alias = true` for alias-based access.
 
 `[paths]`:
 

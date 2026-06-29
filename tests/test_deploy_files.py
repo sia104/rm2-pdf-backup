@@ -16,6 +16,9 @@ def test_dev_config_example_uses_rmc_svg_renderer() -> None:
     config = Path("deploy/config/dev.example.toml").read_text(encoding="utf-8")
 
     assert 'mode = "rmc-svg"' in config
+    assert 'host = "rm2"' in config
+    assert "ssh_alias = true" in config
+    assert 'user = "root"' not in config
     assert '/home/k11-user/rm2-backup-dev' in config
     assert '/srv/rm2-backup' not in config
 
@@ -106,6 +109,21 @@ def test_install_docs_reference_rmc_extra_for_rpi_runtime() -> None:
     assert 'pip install -e ".[dev,rmc]"' in install_doc
     assert 'pip install -e ".[dev,rmc]"' in rpi_doc
     assert 'pip install -e ".[rmc]"' in readme
+
+
+def test_rpi_ssh_access_doc_covers_alias_and_explicit_key_modes() -> None:
+    doc = Path("docs/rpi-ssh-access.md").read_text(encoding="utf-8")
+    install_doc = Path("docs/install-config-run.md").read_text(encoding="utf-8")
+    docs_index = Path("docs/README.md").read_text(encoding="utf-8")
+
+    assert "docs/rpi-ssh-access.md" in install_doc
+    assert "rpi-ssh-access.md" in docs_index
+    assert "ssh_alias = true" in doc
+    assert "rm2:/home/root/.local/share/remarkable/xochitl/" in doc
+    assert "Do not use `user = \"\"`" in doc
+    assert "ssh_key = \"/PRIVATE/RPI/ONLY/PATH/TO/RM2_KEY\"" in doc
+    assert "ssh-keygen -f \"$HOME/.ssh/known_hosts\" -R rm2" in doc
+    assert "HostName SPARE_RM2_HOST_OR_LOCAL_IP" in doc
 
 
 def test_rpi_dev_systemd_validation_workflow_is_manual_only() -> None:
