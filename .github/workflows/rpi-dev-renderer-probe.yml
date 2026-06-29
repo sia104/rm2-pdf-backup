@@ -23,8 +23,7 @@ jobs:
           python3 -m venv .venv-renderer
           . .venv-renderer/bin/activate
           python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet -e ".[dev]"
-          python -m pip install --quiet rmc
+          python -m pip install --quiet -e ".[dev,rmc]"
           echo "test_rm2_sw_version=$TEST_RM2_SW_VERSION"
           echo "which_rmc=$(command -v rmc || true)"
           python -m pip show rmc || true

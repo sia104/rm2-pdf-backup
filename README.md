@@ -60,4 +60,10 @@ ruff check .
 pytest
 ```
 
+For Raspberry Pi runs using `renderer.mode = "rmc-svg"`, install the renderer extra:
+
+```bash
+pip install -e ".[rmc]"
+```
+
 Safe Raspberry Pi validation starts with the spare RM2 and the manually triggered self-hosted runner workflows. Do not SSH, SCP, or rsync to an RM2 from a developer Mac.

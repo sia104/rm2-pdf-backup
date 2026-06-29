@@ -1,4 +1,5 @@
 from pathlib import Path
+import tomllib
 
 
 def test_dev_systemd_units_reference_dev_paths() -> None:
@@ -66,6 +67,45 @@ def test_install_config_run_doc_covers_safe_operator_path() -> None:
     assert "Use `/srv/rm2-backup` only for the real production profile" in doc
     assert "It must not include `--delete`" in doc
     assert "Do not commit edited local or production config files" in doc
+
+
+def test_rmc_extra_declares_renderer_runtime_dependencies() -> None:
+    payload = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    rmc_extra = payload["project"]["optional-dependencies"]["rmc"]
+
+    assert "rmc" in rmc_extra
+    assert "cairosvg" in rmc_extra
+    assert "pypdf" in rmc_extra
+
+
+def test_rpi_renderer_workflows_use_rmc_extra() -> None:
+    workflow_paths = (
+        ".github/workflows/rpi-dev-template-render-probe.yml",
+        ".github/workflows/rpi-dev-svg-renderer.yml",
+        ".github/workflows/rpi-dev-run-local.yml",
+        ".github/workflows/rpi-dev-pdf-compose.yml",
+        ".github/workflows/rpi-dev-renderer-probe.yml",
+        ".github/workflows/rpi-dev-two-run.yml",
+        ".github/workflows/rpi-dev-raw-copy.yml",
+    )
+
+    for path in workflow_paths:
+        workflow = Path(path).read_text(encoding="utf-8")
+        assert 'pip install --quiet -e ".[dev,rmc]"' in workflow
+        assert "pip install --quiet rmc" not in workflow
+        assert "pip install --quiet rmc cairosvg pypdf" not in workflow
+
+
+def test_install_docs_reference_rmc_extra_for_rpi_runtime() -> None:
+    install_doc = Path("docs/install-config-run.md").read_text(encoding="utf-8")
+    rpi_doc = Path("docs/rpi-install.md").read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert 'pip install -e ".[rmc]"' in install_doc
+    assert 'pip install -e ".[dev,rmc]"' in install_doc
+    assert 'pip install -e ".[dev,rmc]"' in rpi_doc
+    assert 'pip install -e ".[rmc]"' in readme
 
 
 def test_rpi_dev_systemd_validation_workflow_is_manual_only() -> None:

@@ -13,6 +13,12 @@ pip install -e ".[dev]"
 rm2-backup plan --metadata-dir tests/fixtures/synthetic_xochitl
 ```
 
+For `renderer.mode = "rmc-svg"` on the Raspberry Pi, install renderer dependencies too:
+
+```bash
+pip install -e ".[dev,rmc]"
+```
+
 Expected result: the command prints planned relative PDF paths for the synthetic fixture set.
 
 ## 2. Create local storage areas
