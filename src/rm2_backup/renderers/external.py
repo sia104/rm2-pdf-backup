@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from rm2_backup.render_queue import RenderPlanItem
-from rm2_backup.renderers.base import RenderResult
+from rm2_backup.renderers.base import RenderDiagnostics, RenderResult
 
 
 class ExternalCommandRenderer:
@@ -42,5 +42,19 @@ class ExternalCommandRenderer:
                 ok=False,
                 output_path=None,
                 error=completed.stderr or completed.stdout,
+                diagnostics=RenderDiagnostics(
+                    renderer_primary="external",
+                    renderer_final="external",
+                    highlighter_colour_mode="unknown",
+                ),
             )
-        return RenderResult(uuid=item.uuid, ok=True, output_path=staging_pdf)
+        return RenderResult(
+            uuid=item.uuid,
+            ok=True,
+            output_path=staging_pdf,
+            diagnostics=RenderDiagnostics(
+                renderer_primary="external",
+                renderer_final="external",
+                highlighter_colour_mode="unknown",
+            ),
+        )

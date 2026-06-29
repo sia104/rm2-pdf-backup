@@ -16,8 +16,9 @@ Chosen policy:
 
 - exported PDFs should include templates;
 - if a template is missing, publish handwriting and warn;
-- run reports should note `template_background=svg`, `template_background=png`, or `template_background=omitted` when template rendering is attempted;
+- run reports should note `template_refs=...`, `template_missing=...`, and `template_backgrounds=svg|png|omitted` when template rendering is attempted;
+- run reports should also record `renderer_primary`, `renderer_final`, `validation_status`, `fallback_attempted`, `fallback_reason`, `published`, and `highlighter_colour_mode`;
 - custom templates should be supported;
 - existing successful PDFs should not be regenerated just because a template changes later;
 - exact visual matching is the long-term target;
-- automated visual checks are future work.
+- automated visual checks and true highlighter colour preservation remain future work.

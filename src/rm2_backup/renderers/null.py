@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from rm2_backup.render_queue import RenderPlanItem
-from rm2_backup.renderers.base import RenderResult
+from rm2_backup.renderers.base import RenderDiagnostics, RenderResult
 
 _MINIMAL_PDF = b"""%PDF-1.4
 1 0 obj
@@ -47,4 +47,13 @@ class PlaceholderRenderer:
         del raw_xochitl
         staging_pdf.parent.mkdir(parents=True, exist_ok=True)
         staging_pdf.write_bytes(_MINIMAL_PDF)
-        return RenderResult(uuid=item.uuid, ok=True, output_path=staging_pdf)
+        return RenderResult(
+            uuid=item.uuid,
+            ok=True,
+            output_path=staging_pdf,
+            diagnostics=RenderDiagnostics(
+                renderer_primary="placeholder",
+                renderer_final="placeholder",
+                highlighter_colour_mode="unknown",
+            ),
+        )
