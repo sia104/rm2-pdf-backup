@@ -96,10 +96,14 @@ def run_raw_sync(config: AppConfig) -> RawSyncReport:
 
 
 def _rsync_argv(config: AppConfig, source_path: str, destination: Path) -> tuple[str, ...]:
-    remote = f"{config.rm2.user}@{config.rm2.host}:{source_path}"
-    ssh_parts = ["ssh", "-p", str(config.rm2.port)]
-    if config.rm2.ssh_key is not None:
-        ssh_parts.extend(["-i", str(config.rm2.ssh_key)])
+    if config.rm2.ssh_alias:
+        remote = f"{config.rm2.host}:{source_path}"
+        ssh_parts = ["ssh"]
+    else:
+        remote = f"{config.rm2.user}@{config.rm2.host}:{source_path}"
+        ssh_parts = ["ssh", "-p", str(config.rm2.port)]
+        if config.rm2.ssh_key is not None:
+            ssh_parts.extend(["-i", str(config.rm2.ssh_key)])
 
     return (
         "rsync",

@@ -1,7 +1,6 @@
 [rm2]
 host = "rm2"
-user = "root"
-port = 22
+ssh_alias = true
 
 [paths]
 backup_root = "/home/k11-user/rm2-backup-dev"
