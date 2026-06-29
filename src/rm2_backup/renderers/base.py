@@ -17,6 +17,7 @@ class RenderResult:
     ok: bool
     output_path: Path | None
     error: str | None = None
+    warning: str | None = None
 
 
 class Renderer(Protocol):

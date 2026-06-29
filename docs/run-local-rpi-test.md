@@ -25,3 +25,10 @@ For malformed SVG failures, the report should include page-level diagnostics suc
 - `return_code=...`;
 - `parse_error=...`;
 - an `stderr=...` snippet from `rmc`.
+
+If direct PDF fallback succeeds, the document can be published with:
+
+- `renderer_warning=used_direct_pdf_fallback_after_svg_failure`;
+- `original_error=...` containing the SVG failure diagnostics.
+
+Treat fallback output as a recovery path. Review the generated PDF before relying on it for production timer runs.

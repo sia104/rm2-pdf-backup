@@ -9,7 +9,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from rm2_backup.pdf_compose import PdfCompositionError, compose_svg_pages_to_pdf
+from rm2_backup.pdf_compose import (
+    PdfCompositionError,
+    compose_pdf_pages_to_pdf,
+    compose_svg_pages_to_pdf,
+)
 from rm2_backup.render_queue import RenderPlanItem
 from rm2_backup.renderers.base import RenderResult
 
@@ -188,11 +192,17 @@ class RmcSvgRenderer:
         work_dir = staging_pdf.parent / f"{staging_pdf.stem}-svg"
         summary = self.render_svg_pages(item, raw_xochitl=raw_xochitl, work_dir=work_dir)
         if not summary.ok_for_composition:
+            fallback = self.render_pdf_fallback(item, summary=summary, staging_pdf=staging_pdf)
+            if fallback.ok:
+                return fallback
+            error = summary_failure_message(summary)
+            if fallback.error:
+                error = f"{error}; fallback_error={fallback.error}"
             return RenderResult(
                 uuid=item.uuid,
                 ok=False,
                 output_path=None,
-                error=summary_failure_message(summary),
+                error=error,
             )
 
         if self.compose_command is not None:
@@ -209,6 +219,70 @@ class RmcSvgRenderer:
         except PdfCompositionError as exc:
             return RenderResult(uuid=item.uuid, ok=False, output_path=None, error=str(exc))
         return RenderResult(uuid=item.uuid, ok=True, output_path=staging_pdf)
+
+    def render_pdf_fallback(
+        self,
+        item: RenderPlanItem,
+        *,
+        summary: SvgRenderSummary,
+        staging_pdf: Path,
+    ) -> RenderResult:
+        """Try direct rmc PDF rendering when SVG output is unusable."""
+
+        if not _should_try_pdf_fallback(summary):
+            return RenderResult(
+                uuid=item.uuid,
+                ok=False,
+                output_path=None,
+                error="direct PDF fallback not attempted for this SVG failure",
+            )
+
+        pdf_dir = staging_pdf.parent / f"{staging_pdf.stem}-direct-pdf"
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        page_pdfs: list[Path] = []
+        for index, page_result in enumerate(summary.page_results, start=1):
+            page_pdf = pdf_dir / f"{index:04d}-{page_result.page_path.stem}.pdf"
+            try:
+                completed = self.runner(
+                    [self.executable, str(page_result.page_path), "-o", str(page_pdf)],
+                    check=False,
+                    text=True,
+                    capture_output=True,
+                )
+            except FileNotFoundError:
+                return RenderResult(
+                    uuid=item.uuid,
+                    ok=False,
+                    output_path=None,
+                    error=f"direct PDF fallback executable not found: {self.executable}",
+                )
+            if completed.returncode != 0 or not page_pdf.exists() or page_pdf.stat().st_size == 0:
+                return RenderResult(
+                    uuid=item.uuid,
+                    ok=False,
+                    output_path=None,
+                    error=(
+                        "direct PDF fallback failed for "
+                        f"{page_result.page_path.name}: return_code={completed.returncode}, "
+                        f"stderr={_clean_detail(completed.stderr)}"
+                    ),
+                )
+            page_pdfs.append(page_pdf)
+
+        try:
+            compose_pdf_pages_to_pdf(page_pdfs, staging_pdf)
+        except PdfCompositionError as exc:
+            return RenderResult(uuid=item.uuid, ok=False, output_path=None, error=str(exc))
+
+        return RenderResult(
+            uuid=item.uuid,
+            ok=True,
+            output_path=staging_pdf,
+            warning=(
+                "renderer_warning=used_direct_pdf_fallback_after_svg_failure; "
+                f"original_error={summary_failure_message(summary)}"
+            ),
+        )
 
 
 def find_rm_page_files(raw_xochitl: Path, uuid: str) -> tuple[Path, ...]:
@@ -327,6 +401,11 @@ def _summary_failure_category(summary: SvgRenderSummary) -> str:
     if summary.clean_pages < summary.total_pages:
         return "renderer_nonzero_exit"
     return "unknown"
+
+
+def _should_try_pdf_fallback(summary: SvgRenderSummary) -> bool:
+    category = _summary_failure_category(summary)
+    return category in {"malformed_svg", "partial_svg_output", "no_svg_output"}
 
 
 def _first_problem_page(summary: SvgRenderSummary) -> SvgPageResult | None:

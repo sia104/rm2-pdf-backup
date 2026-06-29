@@ -120,7 +120,14 @@ def run_local(config: AppConfig) -> PipelineResult:
             completed += 1
             published += 1
             manifest.record_render_result(item, source_hash=source_hash, status="ok")
-            events.append(_event(item, "ok", template_message, destination=publish_result.destination))
+            events.append(
+                _event(
+                    item,
+                    "ok",
+                    _join_messages(result.warning, template_message),
+                    destination=publish_result.destination,
+                )
+            )
 
     report_path = _write_run_report(
         config.paths.reports / "run-local-report.txt",
