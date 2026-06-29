@@ -87,12 +87,12 @@ def test_render_reports_malformed_svg_category(tmp_path: Path) -> None:
     raw = tmp_path / "raw"
     doc_dir = raw / "doc"
     doc_dir.mkdir(parents=True)
-    (doc_dir / "page.rm").write_bytes(b"rm")
+    (doc_dir / "page.rm").write_bytes(b"rm-page-bytes")
 
     def fake_runner(argv, **kwargs):
         svg_path = Path(argv[4])
         svg_path.write_text("<svg>", encoding="utf-8")
-        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="KeyError: 9")
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr="KeyError: 9\npalette fail")
 
     renderer = RmcSvgRenderer(runner=fake_runner)
     result = renderer.render(_item(), raw_xochitl=raw, staging_pdf=tmp_path / "out.pdf")
@@ -101,6 +101,13 @@ def test_render_reports_malformed_svg_category(tmp_path: Path) -> None:
     assert result.output_path is None
     assert result.error is not None
     assert "category=malformed_svg" in result.error
+    assert "page=page.rm" in result.error
+    assert "page_bytes=13" in result.error
+    assert "svg=0001-page.svg" in result.error
+    assert "svg_bytes=5" in result.error
+    assert "return_code=1" in result.error
+    assert "parse_error=no element found" in result.error
+    assert "stderr=KeyError: 9 palette fail" in result.error
 
 
 def test_render_reports_no_svg_output_category(tmp_path: Path) -> None:
@@ -138,6 +145,9 @@ def test_render_reports_missing_rmc_executable_category(tmp_path: Path) -> None:
     assert result.error is not None
     assert "category=renderer_executable_not_found" in result.error
     assert "usable=0/1" in result.error
+    assert "page=page.rm" in result.error
+    assert "return_code=127" in result.error
+    assert "stderr=renderer executable not found: rmc" in result.error
 
 
 def test_render_reports_pdf_composition_failure_after_svg_success(tmp_path: Path) -> None:
