@@ -16,3 +16,12 @@ The run is diagnostic. Partial rendering is expected while `rmc` does not suppor
 - renderer failures are recorded;
 - staged PDFs are only created for valid rendered outputs;
 - a summary artifact is uploaded.
+
+For malformed SVG failures, the report should include page-level diagnostics such as:
+
+- `category=malformed_svg`;
+- failing `page=...`;
+- `page_bytes=...` and `svg_bytes=...`;
+- `return_code=...`;
+- `parse_error=...`;
+- an `stderr=...` snippet from `rmc`.

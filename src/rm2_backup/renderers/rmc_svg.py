@@ -32,6 +32,40 @@ class SvgPageResult:
         return self.svg_path.exists() and self.svg_path.stat().st_size > 0
 
     @property
+    def page_size(self) -> int:
+        """Return the source page byte size, or zero if it cannot be read."""
+
+        try:
+            return self.page_path.stat().st_size
+        except OSError:
+            return 0
+
+    @property
+    def svg_size(self) -> int:
+        """Return the SVG byte size, or zero if no SVG exists."""
+
+        try:
+            return self.svg_path.stat().st_size
+        except OSError:
+            return 0
+
+    @property
+    def svg_parse_error(self) -> str | None:
+        """Return a concise SVG parse error for malformed SVG output."""
+
+        if not self.has_svg:
+            return None
+        try:
+            root = ET.parse(self.svg_path).getroot()
+        except ET.ParseError as exc:
+            return str(exc)
+        except (OSError, UnicodeDecodeError) as exc:
+            return exc.__class__.__name__
+        if not root.tag.endswith("svg"):
+            return f"root tag is not svg: {root.tag}"
+        return None
+
+    @property
     def is_well_formed_svg(self) -> bool:
         """Return whether the SVG is parseable XML."""
 
@@ -255,12 +289,28 @@ def summary_failure_message(summary: SvgRenderSummary) -> str:
     """Return a concise, categorized message for an incomplete SVG render."""
 
     category = _summary_failure_category(summary)
-    return (
+    message = (
         f"rmc SVG render incomplete for {summary.uuid}: category={category}, "
         f"usable={summary.usable_pages}/{summary.total_pages}, "
         f"non_empty={summary.non_empty_pages}, malformed={summary.malformed_pages}, "
         f"clean={summary.clean_pages}"
     )
+    problem = _first_problem_page(summary)
+    if problem is None:
+        return message
+    details = [
+        f"page={problem.page_path.name}",
+        f"page_bytes={problem.page_size}",
+        f"svg={problem.svg_path.name}",
+        f"svg_bytes={problem.svg_size}",
+        f"return_code={problem.return_code}",
+    ]
+    parse_error = problem.svg_parse_error
+    if parse_error:
+        details.append(f"parse_error={_clean_detail(parse_error)}")
+    if problem.stderr:
+        details.append(f"stderr={_clean_detail(problem.stderr)}")
+    return f"{message}, detail: {', '.join(details)}"
 
 
 def _summary_failure_category(summary: SvgRenderSummary) -> str:
@@ -277,3 +327,17 @@ def _summary_failure_category(summary: SvgRenderSummary) -> str:
     if summary.clean_pages < summary.total_pages:
         return "renderer_nonzero_exit"
     return "unknown"
+
+
+def _first_problem_page(summary: SvgRenderSummary) -> SvgPageResult | None:
+    for result in summary.page_results:
+        if not result.is_usable or result.return_code != 0:
+            return result
+    return None
+
+
+def _clean_detail(value: str, *, limit: int = 160) -> str:
+    cleaned = " ".join(value.split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 3] + "..."
