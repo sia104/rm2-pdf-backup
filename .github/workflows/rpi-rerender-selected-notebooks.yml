@@ -1,0 +1,82 @@
+name: RPI rerender selected RM2 notebooks
+
+on:
+  workflow_dispatch:
+    inputs:
+      notebook_uuids:
+        description: Comma-separated notebook UUIDs to rerender
+        required: true
+        default: 285738be-c346-4923-ac26-70d7ff02e5f5,05d1a569-8d05-4f6e-9e99-6a5bff2afc16
+        type: string
+      notebook_names:
+        description: Optional comma-separated notebook names for report readability
+        required: false
+        default: Notebook 3,Folder2/Notebook 2
+        type: string
+      source_mode:
+        description: Use existing raw backup or resync from the spare RM2 first
+        required: true
+        default: raw-backup
+        type: choice
+        options:
+          - raw-backup
+          - rm2-live
+      config_path:
+        description: Private RPI config path
+        required: true
+        default: /etc/rm2-backup-test/config.toml
+        type: string
+      publish_current:
+        description: Replace pdf/current outputs only if validation passes
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  rerender-selected:
+    name: Rerender selected notebooks on RPI
+    runs-on: [self-hosted, rpi, rm2, dev]
+    timeout-minutes: 40
+    env:
+      ARTIFACT_DIR: ${{ github.workspace }}/selected-rerender-artifacts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install package and renderer dependencies
+        run: |
+          python3 -m venv .venv-selected-rerender
+          . .venv-selected-rerender/bin/activate
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e ".[dev,rmc]"
+
+      - name: Rerender selected notebooks
+        run: |
+          set -Eeuo pipefail
+          . .venv-selected-rerender/bin/activate
+          rm -rf "$ARTIFACT_DIR"
+          mkdir -p "$ARTIFACT_DIR"
+
+          args=(
+            --config "${{ inputs.config_path }}"
+            --notebook-uuids "${{ inputs.notebook_uuids }}"
+            --notebook-names "${{ inputs.notebook_names }}"
+            --source-mode "${{ inputs.source_mode }}"
+            --artifact-dir "$ARTIFACT_DIR"
+          )
+          if [ "${{ inputs.publish_current }}" = "true" ]; then
+            args+=(--publish-current)
+          fi
+
+          python scripts/rerender_selected_notebooks.py "${args[@]}"
+
+      - name: Upload selected rerender artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selected-rerender-${{ github.run_id }}
+          path: ${{ env.ARTIFACT_DIR }}
+          if-no-files-found: error
