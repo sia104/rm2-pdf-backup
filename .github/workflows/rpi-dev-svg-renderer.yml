@@ -22,8 +22,7 @@ jobs:
           python3 -m venv .venv-svg-renderer
           . .venv-svg-renderer/bin/activate
           python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet -e ".[dev]"
-          python -m pip install --quiet rmc
+          python -m pip install --quiet -e ".[dev,rmc]"
 
       - name: Render SVG pages from copied raw data
         run: |

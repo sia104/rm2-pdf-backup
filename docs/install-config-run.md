@@ -30,6 +30,7 @@ Local development requires:
 - `pip`;
 - `git`;
 - development dependencies from `.[dev]` for tests and linting.
+- renderer dependencies from `.[rmc]` when using `mode = "rmc-svg"`.
 
 Raspberry Pi operation also requires:
 
@@ -102,11 +103,11 @@ git clone https://github.com/sia104/rm2-pdf-backup.git rm2-pdf-backup
 cd /opt/rm2-pdf-backup
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e .
+pip install -e ".[rmc]"
 rm2-backup plan --metadata-dir tests/fixtures/synthetic_xochitl
 ```
 
-Use `pip install -e ".[dev]"` when you want test/lint tooling on the Raspberry Pi. Use `pip install -e .` for a smaller runtime install.
+Use `pip install -e ".[dev,rmc]"` when you want test/lint tooling and the `rmc-svg` renderer on the Raspberry Pi. Use `pip install -e ".[rmc]"` for a smaller runtime install that still supports the intended production renderer.
 
 For a production-style service account, keep the virtual environment and runtime storage outside the repository. The committed systemd examples expect the development checkout and runtime root to be reviewed before use.
 
@@ -283,8 +284,15 @@ rmc --help
 ```
 
 If `rm2-backup run-local` reports `category=renderer_executable_not_found`,
-install or expose `rmc` on the Raspberry Pi and rerun the local pipeline. The
-backup raw copy should be left intact while fixing renderer installation.
+install the renderer extra and rerun the local pipeline:
+
+```bash
+cd /opt/rm2-pdf-backup
+. .venv/bin/activate
+pip install -e ".[rmc]"
+```
+
+The backup raw copy should be left intact while fixing renderer installation.
 
 For production-like testing with the spare RM2, use:
 

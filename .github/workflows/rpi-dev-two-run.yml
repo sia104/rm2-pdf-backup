@@ -22,8 +22,7 @@ jobs:
           python3 -m venv .venv-two-run
           . .venv-two-run/bin/activate
           python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet -e ".[dev]"
-          python -m pip install --quiet rmc cairosvg pypdf
+          python -m pip install --quiet -e ".[dev,rmc]"
 
       - name: Run local pipeline twice
         run: |
