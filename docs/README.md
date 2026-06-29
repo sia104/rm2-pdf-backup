@@ -10,3 +10,5 @@ Initial documentation targets:
 - backup storage layout;
 - renderer validation notes;
 - failure and rollback procedures.
+
+Start with `install-config-run.md` for operator installation, configuration, and run instructions.
