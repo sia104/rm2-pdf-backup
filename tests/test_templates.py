@@ -58,3 +58,39 @@ def test_document_template_summary_warns_about_missing_template(tmp_path):
     assert summary.missing == ("Missing-form",)
     assert not summary.ok
     assert "template_missing=Missing-form" in summary.message
+
+
+def test_document_template_summary_uses_templates_json_aliases(tmp_path):
+    xochitl = tmp_path / "xochitl"
+    xochitl.mkdir()
+    templates = tmp_path / "templates"
+    templates.mkdir()
+    (templates / "P Perspective.svg").write_text("<svg />", encoding="utf-8")
+    (templates / "templates.json").write_text(
+        json.dumps(
+            {
+                "templates": [
+                    {
+                        "filename": "P Perspective",
+                        "name": "Perspective2",
+                        "iconCode": "P Perspective",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (xochitl / "doc.content").write_text(
+        json.dumps({"template": "Perspective2"}),
+        encoding="utf-8",
+    )
+
+    summary = summarise_document_templates(
+        raw_xochitl=xochitl,
+        uuid="doc",
+        inventory=build_template_inventory(templates),
+    )
+
+    assert summary.references == ("Perspective2",)
+    assert summary.missing == ()
+    assert summary.ok
