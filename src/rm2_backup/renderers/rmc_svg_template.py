@@ -19,11 +19,17 @@ class TemplateRmcSvgRenderer(RmcSvgRenderer):
         work_dir = staging_pdf.parent / f"{staging_pdf.stem}-svg"
         summary = self.render_svg_pages(item, raw_xochitl=raw_xochitl, work_dir=work_dir)
         if not summary.ok_for_composition:
+            fallback = self.render_pdf_fallback(item, summary=summary, staging_pdf=staging_pdf)
+            if fallback.ok:
+                return fallback
+            error = summary_failure_message(summary)
+            if fallback.error:
+                error = f"{error}; fallback_error={fallback.error}"
             return RenderResult(
                 uuid=item.uuid,
                 ok=False,
                 output_path=None,
-                error=summary_failure_message(summary),
+                error=error,
             )
 
         svg_paths = add_template_backgrounds(

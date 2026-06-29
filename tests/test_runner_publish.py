@@ -26,6 +26,7 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
                 visible_path=("Folder", "Notebook"),
                 output_relative_path="Folder/Notebook.pdf",
                 status="ok",
+                message="renderer_warning=used_direct_pdf_fallback_after_svg_failure",
             ),
             PipelineEvent(
                 uuid="bad-doc",
@@ -43,5 +44,6 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
     assert "renderer: rmc-svg" in text
     assert "templates_file_count: 66" in text
     assert "- ok: Folder/Notebook" in text
+    assert "message: renderer_warning=used_direct_pdf_fallback_after_svg_failure" in text
     assert "- failed: Broken" in text
     assert "message: renderer error with detail" in text

@@ -54,3 +54,37 @@ def compose_svg_pages_to_pdf(svg_paths: Sequence[Path], output_pdf: Path) -> Pat
         writer.write(handle)
     tmp_pdf.replace(output_pdf)
     return output_pdf
+
+
+def compose_pdf_pages_to_pdf(pdf_paths: Sequence[Path], output_pdf: Path) -> Path:
+    """Merge one or more rendered page PDFs into a single PDF."""
+
+    if not pdf_paths:
+        raise PdfCompositionError("No PDF pages supplied for PDF composition")
+
+    try:
+        from pypdf import PdfReader, PdfWriter
+    except ImportError as exc:  # pragma: no cover - exercised by deployment envs
+        raise PdfCompositionError("PDF composition requires pypdf to be installed") from exc
+
+    writer = PdfWriter()
+    for pdf_path in pdf_paths:
+        if not pdf_path.is_file() or pdf_path.stat().st_size == 0:
+            raise PdfCompositionError(f"PDF page is missing or empty: {pdf_path}")
+        try:
+            reader = PdfReader(pdf_path)
+            if len(reader.pages) == 0:
+                raise PdfCompositionError(f"PDF page has no pages: {pdf_path}")
+            for page in reader.pages:
+                writer.add_page(page)
+        except PdfCompositionError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive external-library boundary
+            raise PdfCompositionError(f"Could not compose PDF page {pdf_path}: {exc}") from exc
+
+    output_pdf.parent.mkdir(parents=True, exist_ok=True)
+    tmp_pdf = output_pdf.with_name(f".{output_pdf.name}.tmp")
+    with tmp_pdf.open("wb") as handle:
+        writer.write(handle)
+    tmp_pdf.replace(output_pdf)
+    return output_pdf
