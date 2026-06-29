@@ -7,7 +7,7 @@ from pathlib import Path
 
 from rm2_backup.pdf_compose import PdfCompositionError, compose_svg_pages_to_pdf
 from rm2_backup.render_queue import RenderPlanItem
-from rm2_backup.renderers.base import RenderResult
+from rm2_backup.renderers.base import RenderDiagnostics, RenderResult
 from rm2_backup.renderers.rmc_svg import RmcSvgRenderer, summary_failure_message
 from rm2_backup.template_compose import compose_template_background, resolve_template_file
 from rm2_backup.templates import build_template_inventory, summarise_document_templates
@@ -37,6 +37,11 @@ class TemplateRmcSvgRenderer(RmcSvgRenderer):
                 ok=False,
                 output_path=None,
                 error=error,
+                diagnostics=self._diagnostics(
+                    renderer_final="rmc-svg",
+                    fallback_attempted=fallback.diagnostics.fallback_attempted,
+                    fallback_reason=fallback.diagnostics.fallback_reason,
+                ),
             )
 
         background = add_template_backgrounds(
@@ -48,12 +53,30 @@ class TemplateRmcSvgRenderer(RmcSvgRenderer):
         try:
             compose_svg_pages_to_pdf(background.svg_paths, staging_pdf)
         except PdfCompositionError as exc:
-            return RenderResult(uuid=item.uuid, ok=False, output_path=None, error=str(exc))
+            return RenderResult(
+                uuid=item.uuid,
+                ok=False,
+                output_path=None,
+                error=str(exc),
+                diagnostics=self._template_diagnostics(background.warning),
+            )
         return RenderResult(
             uuid=item.uuid,
             ok=True,
             output_path=staging_pdf,
             warning=background.warning,
+            diagnostics=self._template_diagnostics(background.warning),
+        )
+
+    def _template_diagnostics(self, warning: str | None) -> RenderDiagnostics:
+        template_background = None
+        if warning and warning.startswith("template_background="):
+            template_background = warning.split("=", 1)[1]
+        return RenderDiagnostics(
+            renderer_primary="rmc-svg",
+            renderer_final="rmc-svg",
+            template_background=template_background,
+            highlighter_colour_mode="unknown",
         )
 
 

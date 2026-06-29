@@ -27,6 +27,16 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
                 output_relative_path="Folder/Notebook.pdf",
                 status="ok",
                 message="renderer_warning=used_direct_pdf_fallback_after_svg_failure",
+                template_refs=("mind_map_rm2",),
+                template_missing=("mind_map_rm2",),
+                renderer_primary="rmc-svg",
+                renderer_final="rmc-pdf-fallback",
+                template_backgrounds="omitted",
+                highlighter_colour_mode="unknown",
+                validation_status="passed",
+                fallback_attempted=True,
+                fallback_reason="malformed_svg",
+                published=True,
             ),
             PipelineEvent(
                 uuid="bad-doc",
@@ -34,6 +44,12 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
                 output_relative_path="Broken.pdf",
                 status="failed",
                 message="renderer error\nwith detail",
+                renderer_primary="rmc-svg",
+                renderer_final="rmc-svg",
+                highlighter_colour_mode="unknown",
+                validation_status="failed",
+                fallback_attempted=False,
+                published=False,
             ),
         ],
     )
@@ -44,6 +60,19 @@ def test_write_run_report_contains_counts_and_events(tmp_path) -> None:
     assert "renderer: rmc-svg" in text
     assert "templates_file_count: 66" in text
     assert "- ok: Folder/Notebook" in text
+    assert "renderer_primary: rmc-svg" in text
+    assert "renderer_final: rmc-pdf-fallback" in text
+    assert "template_refs: mind_map_rm2" in text
+    assert "template_missing: mind_map_rm2" in text
+    assert "template_backgrounds: omitted" in text
+    assert "highlighter_colour_mode: unknown" in text
+    assert "validation_status: passed" in text
+    assert "fallback_attempted: true" in text
+    assert "fallback_reason: malformed_svg" in text
+    assert "published: true" in text
     assert "message: renderer_warning=used_direct_pdf_fallback_after_svg_failure" in text
     assert "- failed: Broken" in text
+    assert "validation_status: failed" in text
+    assert "fallback_attempted: false" in text
+    assert "published: false" in text
     assert "message: renderer error with detail" in text

@@ -1,5 +1,6 @@
 from pathlib import Path
 from pathlib import PurePosixPath
+import subprocess
 
 from rm2_backup.render_queue import RenderPlanItem
 from rm2_backup.renderers.rmc_svg_template import TemplateRmcSvgRenderer
@@ -78,3 +79,45 @@ def test_add_template_backgrounds_reports_png_background(tmp_path: Path) -> None
     assert result.warning == "template_background=png"
     assert len(result.svg_paths) == 1
     assert result.svg_paths[0].read_text(encoding="utf-8").count("data:image/png;base64,") == 1
+
+
+def test_template_renderer_reports_template_background_diagnostics(tmp_path: Path, monkeypatch) -> None:
+    raw = tmp_path / "raw" / "xochitl"
+    templates = tmp_path / "raw" / "templates"
+    doc_dir = raw / "doc"
+    doc_dir.mkdir(parents=True)
+    templates.mkdir(parents=True)
+    (doc_dir / "page.rm").write_bytes(b"rm")
+    (raw / "doc.content").write_text('{"template": "Form"}', encoding="utf-8")
+    (templates / "Form.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="paper" width="100" height="100" /></svg>',
+        encoding="utf-8",
+    )
+
+    def fake_runner(argv, **kwargs):
+        svg_path = Path(argv[4])
+        svg_path.write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path id="ink" d="M 1 1 L 9 9" /></svg>',
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    def fake_compose(svg_paths, output_pdf):
+        assert len(svg_paths) == 1
+        output_pdf.write_bytes(b"%PDF-template\n%%EOF\n")
+        return output_pdf
+
+    monkeypatch.setattr(
+        "rm2_backup.renderers.rmc_svg_template.compose_svg_pages_to_pdf",
+        fake_compose,
+    )
+
+    renderer = TemplateRmcSvgRenderer(runner=fake_runner)
+    result = renderer.render(_item(), raw_xochitl=raw, staging_pdf=tmp_path / "out.pdf")
+
+    assert result.ok
+    assert result.warning == "template_background=svg"
+    assert result.diagnostics.renderer_primary == "rmc-svg"
+    assert result.diagnostics.renderer_final == "rmc-svg"
+    assert result.diagnostics.template_background == "svg"
+    assert result.diagnostics.highlighter_colour_mode == "unknown"

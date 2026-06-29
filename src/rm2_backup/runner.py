@@ -10,12 +10,12 @@ from rm2_backup.manifest import Manifest, hash_document_source
 from rm2_backup.metadata import scan_metadata_directory
 from rm2_backup.publish import PublishError, publish_validated_pdf
 from rm2_backup.render_queue import RenderPlanItem, plan_pdf_outputs
-from rm2_backup.renderers.base import Renderer
+from rm2_backup.renderers.base import RenderResult, Renderer
 from rm2_backup.renderers.external import ExternalCommandRenderer
 from rm2_backup.renderers.null import PlaceholderRenderer
 from rm2_backup.renderers.rmc_svg import RmcSvgRenderer
 from rm2_backup.renderers.rmc_svg_template import TemplateRmcSvgRenderer
-from rm2_backup.templates import build_template_inventory, summarise_document_templates
+from rm2_backup.templates import DocumentTemplateSummary, build_template_inventory, summarise_document_templates
 from rm2_backup.tree import build_visible_tree
 from rm2_backup.validate import validate_pdf
 
@@ -42,6 +42,16 @@ class PipelineEvent:
     status: str
     message: str | None = None
     destination: Path | None = None
+    template_refs: tuple[str, ...] = ()
+    template_missing: tuple[str, ...] = ()
+    renderer_primary: str | None = None
+    renderer_final: str | None = None
+    template_backgrounds: str | None = None
+    highlighter_colour_mode: str | None = None
+    validation_status: str = "not_run"
+    fallback_attempted: bool = False
+    fallback_reason: str | None = None
+    published: bool = False
 
 
 def run_local(config: AppConfig) -> PipelineResult:
@@ -62,16 +72,25 @@ def run_local(config: AppConfig) -> PipelineResult:
 
     with Manifest(config.paths.database) as manifest:
         for item in plan:
-            template_message = summarise_document_templates(
+            template_summary = summarise_document_templates(
                 raw_xochitl=source_dir,
                 uuid=item.uuid,
                 inventory=template_inventory,
-            ).message
+            )
+            template_message = template_summary.message
             source_hash = hash_document_source(source_dir, item.uuid)
             decision = manifest.decide(item, source_hash)
             if not decision.should_render:
                 skipped += 1
-                events.append(_event(item, "skipped", _join_messages(decision.reason, template_message)))
+                events.append(
+                    _event(
+                        item,
+                        "skipped",
+                        _join_messages(decision.reason, template_message),
+                        template_summary=template_summary,
+                        published=False,
+                    )
+                )
                 continue
 
             staged_pdf = _staged_pdf_path(config.paths.staging, item.uuid)
@@ -84,7 +103,16 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=result.error,
                 )
-                events.append(_event(item, "failed", _join_messages(result.error, template_message)))
+                events.append(
+                    _event(
+                        item,
+                        "failed",
+                        _join_messages(result.error, template_message),
+                        template_summary=template_summary,
+                        render_result=result,
+                        published=False,
+                    )
+                )
                 continue
 
             validation = validate_pdf(result.output_path)
@@ -96,7 +124,17 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=validation.reason,
                 )
-                events.append(_event(item, "failed", _join_messages(validation.reason, template_message)))
+                events.append(
+                    _event(
+                        item,
+                        "failed",
+                        _join_messages(validation.reason, template_message),
+                        template_summary=template_summary,
+                        render_result=result,
+                        validation_status="failed",
+                        published=False,
+                    )
+                )
                 continue
 
             try:
@@ -114,7 +152,17 @@ def run_local(config: AppConfig) -> PipelineResult:
                     status="failed",
                     error=str(exc),
                 )
-                events.append(_event(item, "failed", _join_messages(str(exc), template_message)))
+                events.append(
+                    _event(
+                        item,
+                        "failed",
+                        _join_messages(str(exc), template_message),
+                        template_summary=template_summary,
+                        render_result=result,
+                        validation_status="passed",
+                        published=False,
+                    )
+                )
                 continue
 
             completed += 1
@@ -125,6 +173,10 @@ def run_local(config: AppConfig) -> PipelineResult:
                     item,
                     "ok",
                     _join_messages(result.warning, template_message),
+                    template_summary=template_summary,
+                    render_result=result,
+                    validation_status="passed",
+                    published=True,
                     destination=publish_result.destination,
                 )
             )
@@ -178,8 +230,13 @@ def _event(
     status: str,
     message: str | None = None,
     *,
+    template_summary: DocumentTemplateSummary | None = None,
+    render_result: RenderResult | None = None,
+    validation_status: str = "not_run",
+    published: bool = False,
     destination: Path | None = None,
 ) -> PipelineEvent:
+    diagnostics = render_result.diagnostics if render_result is not None else None
     return PipelineEvent(
         uuid=item.uuid,
         visible_path=item.visible_path,
@@ -187,6 +244,16 @@ def _event(
         status=status,
         message=message,
         destination=destination,
+        template_refs=template_summary.references if template_summary is not None else (),
+        template_missing=template_summary.missing if template_summary is not None else (),
+        renderer_primary=diagnostics.renderer_primary if diagnostics is not None else None,
+        renderer_final=diagnostics.renderer_final if diagnostics is not None else None,
+        template_backgrounds=diagnostics.template_background if diagnostics is not None else None,
+        highlighter_colour_mode=diagnostics.highlighter_colour_mode if diagnostics is not None else None,
+        validation_status=validation_status,
+        fallback_attempted=diagnostics.fallback_attempted if diagnostics is not None else False,
+        fallback_reason=diagnostics.fallback_reason if diagnostics is not None else None,
+        published=published,
     )
 
 
@@ -224,6 +291,23 @@ def _write_run_report(
         lines.append(f"- {event.status}: {visible}")
         lines.append(f"  uuid: {event.uuid}")
         lines.append(f"  output: {event.output_relative_path}")
+        if event.renderer_primary is not None:
+            lines.append(f"  renderer_primary: {event.renderer_primary}")
+        if event.renderer_final is not None:
+            lines.append(f"  renderer_final: {event.renderer_final}")
+        if event.template_refs:
+            lines.append(f"  template_refs: {','.join(event.template_refs)}")
+        if event.template_missing:
+            lines.append(f"  template_missing: {','.join(event.template_missing)}")
+        if event.template_backgrounds is not None:
+            lines.append(f"  template_backgrounds: {event.template_backgrounds}")
+        if event.highlighter_colour_mode is not None:
+            lines.append(f"  highlighter_colour_mode: {event.highlighter_colour_mode}")
+        lines.append(f"  validation_status: {event.validation_status}")
+        lines.append(f"  fallback_attempted: {'true' if event.fallback_attempted else 'false'}")
+        if event.fallback_reason is not None:
+            lines.append(f"  fallback_reason: {event.fallback_reason}")
+        lines.append(f"  published: {'true' if event.published else 'false'}")
         if event.destination is not None:
             lines.append(f"  destination: {event.destination}")
         if event.message:

@@ -31,4 +31,14 @@ If direct PDF fallback succeeds, the document can be published with:
 - `renderer_warning=used_direct_pdf_fallback_after_svg_failure`;
 - `original_error=...` containing the SVG failure diagnostics.
 
+The run report should also make the selected path explicit with fields such as:
+
+- `renderer_primary=rmc-svg`;
+- `renderer_final=rmc-svg` or `renderer_final=rmc-pdf-fallback`;
+- `validation_status=passed|failed`;
+- `fallback_attempted=true|false`;
+- `fallback_reason=malformed_svg|partial_svg_output|no_svg_output`;
+- `published=true|false`;
+- `highlighter_colour_mode=unknown` until scene-level colour preservation is implemented.
+
 Treat fallback output as a recovery path. Review the generated PDF before relying on it for production timer runs.

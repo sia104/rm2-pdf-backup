@@ -147,6 +147,11 @@ def test_render_uses_direct_pdf_fallback_after_malformed_svg(tmp_path: Path, mon
     assert result.ok
     assert result.output_path == tmp_path / "out.pdf"
     assert result.warning is not None
+    assert result.diagnostics.renderer_primary == "rmc-svg"
+    assert result.diagnostics.renderer_final == "rmc-pdf-fallback"
+    assert result.diagnostics.highlighter_colour_mode == "unknown"
+    assert result.diagnostics.fallback_attempted
+    assert result.diagnostics.fallback_reason == "malformed_svg"
     assert "renderer_warning=used_direct_pdf_fallback_after_svg_failure" in result.warning
     assert "category=malformed_svg" in result.warning
     assert calls[0][0:3] == ("rmc", "-t", "svg")

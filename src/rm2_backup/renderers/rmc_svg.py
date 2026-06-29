@@ -15,7 +15,7 @@ from rm2_backup.pdf_compose import (
     compose_svg_pages_to_pdf,
 )
 from rm2_backup.render_queue import RenderPlanItem
-from rm2_backup.renderers.base import RenderResult
+from rm2_backup.renderers.base import RenderDiagnostics, RenderResult
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -192,6 +192,8 @@ class RmcSvgRenderer:
         work_dir = staging_pdf.parent / f"{staging_pdf.stem}-svg"
         summary = self.render_svg_pages(item, raw_xochitl=raw_xochitl, work_dir=work_dir)
         if not summary.ok_for_composition:
+            fallback_attempted = _should_try_pdf_fallback(summary)
+            fallback_reason = _summary_failure_category(summary)
             fallback = self.render_pdf_fallback(item, summary=summary, staging_pdf=staging_pdf)
             if fallback.ok:
                 return fallback
@@ -203,6 +205,11 @@ class RmcSvgRenderer:
                 ok=False,
                 output_path=None,
                 error=error,
+                diagnostics=self._diagnostics(
+                    renderer_final="rmc-svg",
+                    fallback_attempted=fallback_attempted,
+                    fallback_reason=fallback_reason if fallback_attempted else None,
+                ),
             )
 
         if self.compose_command is not None:
@@ -217,8 +224,19 @@ class RmcSvgRenderer:
         try:
             compose_svg_pages_to_pdf(summary.usable_svg_paths, staging_pdf)
         except PdfCompositionError as exc:
-            return RenderResult(uuid=item.uuid, ok=False, output_path=None, error=str(exc))
-        return RenderResult(uuid=item.uuid, ok=True, output_path=staging_pdf)
+            return RenderResult(
+                uuid=item.uuid,
+                ok=False,
+                output_path=None,
+                error=str(exc),
+                diagnostics=self._diagnostics(renderer_final="rmc-svg"),
+            )
+        return RenderResult(
+            uuid=item.uuid,
+            ok=True,
+            output_path=staging_pdf,
+            diagnostics=self._diagnostics(renderer_final="rmc-svg"),
+        )
 
     def render_pdf_fallback(
         self,
@@ -235,6 +253,7 @@ class RmcSvgRenderer:
                 ok=False,
                 output_path=None,
                 error="direct PDF fallback not attempted for this SVG failure",
+                diagnostics=self._diagnostics(renderer_final="rmc-svg"),
             )
 
         pdf_dir = staging_pdf.parent / f"{staging_pdf.stem}-direct-pdf"
@@ -255,6 +274,11 @@ class RmcSvgRenderer:
                     ok=False,
                     output_path=None,
                     error=f"direct PDF fallback executable not found: {self.executable}",
+                    diagnostics=self._diagnostics(
+                        renderer_final="rmc-svg",
+                        fallback_attempted=True,
+                        fallback_reason=_summary_failure_category(summary),
+                    ),
                 )
             if completed.returncode != 0 or not page_pdf.exists() or page_pdf.stat().st_size == 0:
                 return RenderResult(
@@ -266,13 +290,28 @@ class RmcSvgRenderer:
                         f"{page_result.page_path.name}: return_code={completed.returncode}, "
                         f"stderr={_clean_detail(completed.stderr)}"
                     ),
+                    diagnostics=self._diagnostics(
+                        renderer_final="rmc-svg",
+                        fallback_attempted=True,
+                        fallback_reason=_summary_failure_category(summary),
+                    ),
                 )
             page_pdfs.append(page_pdf)
 
         try:
             compose_pdf_pages_to_pdf(page_pdfs, staging_pdf)
         except PdfCompositionError as exc:
-            return RenderResult(uuid=item.uuid, ok=False, output_path=None, error=str(exc))
+            return RenderResult(
+                uuid=item.uuid,
+                ok=False,
+                output_path=None,
+                error=str(exc),
+                diagnostics=self._diagnostics(
+                    renderer_final="rmc-svg",
+                    fallback_attempted=True,
+                    fallback_reason=_summary_failure_category(summary),
+                ),
+            )
 
         return RenderResult(
             uuid=item.uuid,
@@ -282,6 +321,26 @@ class RmcSvgRenderer:
                 "renderer_warning=used_direct_pdf_fallback_after_svg_failure; "
                 f"original_error={summary_failure_message(summary)}"
             ),
+            diagnostics=self._diagnostics(
+                renderer_final="rmc-pdf-fallback",
+                fallback_attempted=True,
+                fallback_reason=_summary_failure_category(summary),
+            ),
+        )
+
+    def _diagnostics(
+        self,
+        *,
+        renderer_final: str,
+        fallback_attempted: bool = False,
+        fallback_reason: str | None = None,
+    ) -> RenderDiagnostics:
+        return RenderDiagnostics(
+            renderer_primary="rmc-svg",
+            renderer_final=renderer_final,
+            highlighter_colour_mode="unknown",
+            fallback_attempted=fallback_attempted,
+            fallback_reason=fallback_reason,
         )
 
 
@@ -350,8 +409,22 @@ def _run_external_composer(
             ok=False,
             output_path=None,
             error=completed.stderr or completed.stdout or "PDF composition failed",
+            diagnostics=RenderDiagnostics(
+                renderer_primary="rmc-svg",
+                renderer_final="rmc-svg-external-compose",
+                highlighter_colour_mode="unknown",
+            ),
         )
-    return RenderResult(uuid=item.uuid, ok=True, output_path=output_pdf)
+    return RenderResult(
+        uuid=item.uuid,
+        ok=True,
+        output_path=output_pdf,
+        diagnostics=RenderDiagnostics(
+            renderer_primary="rmc-svg",
+            renderer_final="rmc-svg-external-compose",
+            highlighter_colour_mode="unknown",
+        ),
+    )
 
 
 def _compose_argv(command: str, page_results: Sequence[SvgPageResult], output: Path) -> list[str]:
