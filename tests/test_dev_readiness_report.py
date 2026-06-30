@@ -21,9 +21,9 @@ def write(path: Path, text: str = "") -> None:
 
 
 def make_ready_repo(root: Path) -> None:
-    for name in ("README.md", "AGENTS.md", "SPEC.md", "TEST_PLAN.md"):
+    for name in ("README.md", "AGENTS.md", "SPEC.md", "docs/development/test-plan.md"):
         write(root / name, name)
-    write(root / "docs" / "AGENT_WORKFLOW.md", "workflow")
+    write(root / "docs" / "development" / "agent-workflow.md", "workflow")
     write(root / ".github" / "pull_request_template.md", "template")
     write(root / ".github" / "ISSUE_TEMPLATE" / "feature.md", "feature")
     write(root / ".github" / "ISSUE_TEMPLATE" / "bug.md", "bug")

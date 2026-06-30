@@ -14,7 +14,7 @@ The agent should normally work issue-by-issue and pull-request-by-pull-request.
 
 For each development task:
 
-1. Inspect `README.md`, `AGENTS.md`, `SPEC.md`, `TEST_PLAN.md`, existing issues, existing pull requests and relevant workflows before editing.
+1. Inspect `README.md`, `AGENTS.md`, `SPEC.md`, `docs/development/test-plan.md`, existing issues, existing pull requests and relevant workflows before editing.
 2. If no suitable issue exists, create a focused GitHub issue with:
    - goal;
    - scope;

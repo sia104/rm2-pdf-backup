@@ -39,26 +39,16 @@ RM2 over SSH
 
 This repository will be developed as a Python project with modular components, tests, GitHub Actions for normal CI, and a Raspberry Pi self-hosted runner for hardware-in-the-loop testing against a spare RM2.
 
-The detailed behaviour contract is in `SPEC.md`. Codex/project-agent instructions are in `AGENTS.md`. The validation strategy is in `TEST_PLAN.md`.
+The detailed behaviour contract is in `SPEC.md`. Codex/project-agent instructions are in `AGENTS.md`. The validation strategy is in `docs/development/test-plan.md`.
 
 ## Installation, Configuration, and Running
 
 Start with the detailed operator guide:
 
-- `docs/install-config-run.md` explains how to install the package, prepare safe config files, run local dry-runs, run the local pipeline, use the Raspberry Pi self-hosted workflows, and enable systemd only after manual validation.
+- `docs/README.md` is the documentation index.
+- `docs/install-config-run.md` explains how to install the package, prepare safe config files, validate the setup on the Raspberry Pi, and run the local pipeline safely.
 - `docs/mvp-production-deployment.md` defines the gate checklist before any production RM2 timer is enabled.
-- `deploy/config/dev.example.toml` and `deploy/config/production.example.toml` are templates only. Copy them to private files on the Raspberry Pi before editing.
-
-Quick local development check:
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -e ".[dev]"
-rm2-backup plan --metadata-dir tests/fixtures/synthetic_xochitl
-ruff check .
-pytest
-```
+- `deploy/config/production.example.toml` is a template only. Copy it to a private file on the Raspberry Pi before editing.
 
 For Raspberry Pi runs using `renderer.mode = "rmc-svg"`, install the renderer extra:
 
@@ -66,4 +56,4 @@ For Raspberry Pi runs using `renderer.mode = "rmc-svg"`, install the renderer ex
 pip install -e ".[rmc]"
 ```
 
-Safe Raspberry Pi validation starts with the spare RM2 and the manually triggered self-hosted runner workflows. Do not SSH, SCP, or rsync to an RM2 from a developer Mac.
+Do not SSH, SCP, or rsync to an RM2 from a developer Mac.

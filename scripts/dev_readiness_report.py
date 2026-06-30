@@ -11,10 +11,10 @@ REQUIRED_DOCS = (
     "README.md",
     "AGENTS.md",
     "SPEC.md",
-    "TEST_PLAN.md",
+    "docs/development/test-plan.md",
 )
 
-RECOMMENDED_AGENT_DOCS = ("docs/AGENT_WORKFLOW.md",)
+RECOMMENDED_AGENT_DOCS = ("docs/development/agent-workflow.md",)
 
 REQUIRED_TEMPLATES = (
     ".github/pull_request_template.md",
@@ -64,7 +64,11 @@ def check_required_docs(root: Path) -> CheckResult:
     missing = [path for path in REQUIRED_DOCS if not _exists(root, path)]
     if missing:
         return CheckResult("required_docs", False, f"missing: {', '.join(missing)}")
-    return CheckResult("required_docs", True, "README, AGENTS, SPEC and TEST_PLAN are present")
+    return CheckResult(
+        "required_docs",
+        True,
+        "README, AGENTS, SPEC and docs/development/test-plan.md are present",
+    )
 
 
 def check_agent_guidance(root: Path) -> CheckResult:
