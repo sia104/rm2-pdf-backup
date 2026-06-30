@@ -39,7 +39,7 @@ RM2 over SSH
 
 This repository will be developed as a Python project with modular components, tests, GitHub Actions for normal CI, and a Raspberry Pi self-hosted runner for hardware-in-the-loop testing against a spare RM2.
 
-The detailed behaviour contract is in `SPEC.md`. Codex/project-agent instructions are in `AGENTS.md`. The validation strategy is in `TEST_PLAN.md`.
+The detailed behaviour contract is in `SPEC.md`. Codex/project-agent instructions are in `AGENTS.md`. The validation strategy is in `docs/development/test-plan.md`.
 
 ## Installation, Configuration, and Running
 

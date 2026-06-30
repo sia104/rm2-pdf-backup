@@ -14,3 +14,8 @@ Initial documentation targets:
 Start with `install-config-run.md` for operator installation, configuration, and run instructions.
 
 Use `rpi-ssh-access.md` when setting up passwordless Raspberry Pi SSH access to a spare RM2.
+
+Development/process documents live under `docs/development/`, starting with:
+
+- `docs/development/test-plan.md`
+- `docs/development/roadmap.md`
