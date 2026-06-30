@@ -1,21 +1,18 @@
 # Documentation
 
-Project documentation that is not part of the top-level control files can live here.
+## Operator docs
 
-Initial documentation targets:
+Start here if you are installing or running the service on a Raspberry Pi:
 
-- Raspberry Pi setup notes;
-- spare RM2 hardware test setup;
-- systemd service/timer installation;
-- backup storage layout;
-- renderer validation notes;
-- failure and rollback procedures.
+- `install-config-run.md`: main operator guide for installation, configuration, validation, and normal runs.
+- `rpi-ssh-access.md`: Raspberry Pi SSH setup for unattended read-only RM2 access.
+- `mvp-production-deployment.md`: production go/no-go checklist and manual cutover steps.
 
-Start with `install-config-run.md` for operator installation, configuration, and run instructions.
+## Development docs
 
-Use `rpi-ssh-access.md` when setting up passwordless Raspberry Pi SSH access to a spare RM2.
+Contributor, validation, and diagnostic notes live under `docs/development/`.
 
-Development/process documents live under `docs/development/`, starting with:
+Start with `docs/development/README.md`, then use:
 
 - `docs/development/test-plan.md`
 - `docs/development/roadmap.md`

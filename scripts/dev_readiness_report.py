@@ -14,7 +14,7 @@ REQUIRED_DOCS = (
     "docs/development/test-plan.md",
 )
 
-RECOMMENDED_AGENT_DOCS = ("docs/AGENT_WORKFLOW.md",)
+RECOMMENDED_AGENT_DOCS = ("docs/development/agent-workflow.md",)
 
 REQUIRED_TEMPLATES = (
     ".github/pull_request_template.md",

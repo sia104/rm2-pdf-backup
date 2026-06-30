@@ -6,7 +6,7 @@ The intended workflow is:
 
 ```text
 User intent
-  -> agent checks README, AGENTS, SPEC, TEST_PLAN, issues and PRs
+  -> agent checks README, AGENTS, SPEC, docs/development/test-plan, issues and PRs
   -> agent creates or updates a focused GitHub issue
   -> agent creates a branch from main
   -> agent makes the smallest safe change

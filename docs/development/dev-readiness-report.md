@@ -5,7 +5,7 @@ The `Development readiness` workflow generates a static report describing whethe
 It checks:
 
 - required guidance files: `README.md`, `AGENTS.md`, `SPEC.md`, and `docs/development/test-plan.md`;
-- recommended agent workflow guidance in `docs/AGENT_WORKFLOW.md`;
+- recommended agent workflow guidance in `docs/development/agent-workflow.md`;
 - GitHub issue and pull request templates;
 - cloud CI coverage for `ruff check .` and `pytest`;
 - RPI/RM2/self-hosted workflows that can be started manually with `workflow_dispatch`;

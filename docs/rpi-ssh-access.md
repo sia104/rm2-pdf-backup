@@ -1,6 +1,6 @@
 # Raspberry Pi SSH access to RM2 devices
 
-This guide explains how to set up passwordless SSH from the Raspberry Pi to a spare RM2 for unattended raw-copy operations.
+This guide explains how to set up passwordless SSH from the Raspberry Pi to a validation or production RM2 for unattended raw-copy operations.
 
 Run these commands on the Raspberry Pi only. Do not SSH, SCP, or rsync to an RM2 from a developer Mac.
 
@@ -26,12 +26,12 @@ Do not use `user = ""`. Empty user values are unsupported.
 
 ## Generate a dedicated key on the Raspberry Pi
 
-Use a dedicated key for the spare RM2:
+Use a dedicated key for the validation RM2:
 
 ```bash
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
-ssh-keygen -t ed25519 -f "$HOME/.ssh/rm2_spare_ed25519" -C "rm2-backup-spare"
+ssh-keygen -t ed25519 -f "$HOME/.ssh/rm2_validation_ed25519" -C "rm2-backup-validation"
 ```
 
 Do not commit this key or its path to the repository.
@@ -53,7 +53,7 @@ chmod 700 /home/root/.ssh
 chmod 600 /home/root/.ssh/authorized_keys
 ```
 
-This step modifies the spare RM2's SSH authorization state. Do it only for the spare/test RM2 unless production deployment has been explicitly approved.
+This step modifies the validation RM2's SSH authorization state. Do it only for the validation device unless production deployment has been explicitly approved.
 
 ## Configure the Raspberry Pi SSH alias
 
@@ -64,25 +64,25 @@ nano "$HOME/.ssh/config"
 chmod 600 "$HOME/.ssh/config"
 ```
 
-Add a block for the spare RM2:
+Add a block for the validation RM2:
 
 ```sshconfig
 Host rm2
-    HostName SPARE_RM2_HOST_OR_LOCAL_IP
+    HostName VALIDATION_RM2_HOST_OR_LOCAL_IP
     User root
     Port 22
-    IdentityFile ~/.ssh/rm2_spare_ed25519
+    IdentityFile ~/.ssh/rm2_validation_ed25519
     IdentitiesOnly yes
 ```
 
 For multiple RM2 devices, use separate aliases:
 
 ```sshconfig
-Host rm2-spare
-    HostName SPARE_RM2_HOST_OR_LOCAL_IP
+Host rm2-validation
+    HostName VALIDATION_RM2_HOST_OR_LOCAL_IP
     User root
     Port 22
-    IdentityFile ~/.ssh/rm2_spare_ed25519
+    IdentityFile ~/.ssh/rm2_validation_ed25519
     IdentitiesOnly yes
 
 Host rm2-production
@@ -108,7 +108,7 @@ It should complete without a password prompt.
 If your private config uses an IP address directly and you are not using `ssh_alias = true`, also test the explicit form:
 
 ```bash
-ssh root@SPARE_RM2_HOST_OR_LOCAL_IP 'hostname && cat /etc/version'
+ssh root@VALIDATION_RM2_HOST_OR_LOCAL_IP 'hostname && cat /etc/version'
 ```
 
 The explicit form must use the same key, either through a matching `Host` block or an explicit `ssh_key` in private config.
@@ -124,7 +124,7 @@ ssh rm2
 while this still asks for a password:
 
 ```bash
-ssh root@SPARE_RM2_HOST_OR_LOCAL_IP
+ssh root@VALIDATION_RM2_HOST_OR_LOCAL_IP
 ```
 
 The first command uses the `Host rm2` block from `~/.ssh/config`. The second command does not use that alias block unless a matching host block exists for the IP/hostname. If `rsync` uses `root@host`, it can bypass the alias and prompt for a password.
@@ -145,7 +145,7 @@ Explicit host/key mode:
 
 ```toml
 [rm2]
-host = "SPARE_RM2_HOST_OR_LOCAL_IP"
+host = "VALIDATION_RM2_HOST_OR_LOCAL_IP"
 user = "root"
 port = 22
 ssh_key = "/PRIVATE/RPI/ONLY/PATH/TO/RM2_KEY"
@@ -159,7 +159,7 @@ RM2 software updates can change the SSH host fingerprint. Remove stale entries o
 
 ```bash
 ssh-keygen -f "$HOME/.ssh/known_hosts" -R rm2
-ssh-keygen -f "$HOME/.ssh/known_hosts" -R SPARE_RM2_HOST_OR_LOCAL_IP
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R VALIDATION_RM2_HOST_OR_LOCAL_IP
 ```
 
 Then reconnect and verify the new host key through your normal trusted process.
@@ -169,7 +169,7 @@ Then reconnect and verify the new host key through your normal trusted process.
 For alias mode:
 
 ```bash
-rm2-backup sync-plan --config /etc/rm2-backup-test/config.toml
+rm2-backup sync-plan --config /etc/rm2-backup-validation/config.toml
 ```
 
 The remote source should look like:
@@ -181,7 +181,7 @@ rm2:/home/root/.local/share/remarkable/xochitl/
 It should not look like:
 
 ```text
-root@SPARE_RM2_HOST_OR_LOCAL_IP:/home/root/.local/share/remarkable/xochitl/
+root@VALIDATION_RM2_HOST_OR_LOCAL_IP:/home/root/.local/share/remarkable/xochitl/
 ```
 
 unless you intentionally configured explicit host/key mode.

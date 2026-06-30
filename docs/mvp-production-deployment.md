@@ -1,8 +1,8 @@
 # MVP production deployment checklist
 
-This checklist defines the minimum safe path from the development Raspberry Pi setup to a production RM2 backup timer.
+This checklist defines the minimum safe path from Raspberry Pi validation to a production RM2 backup timer.
 
-Production deployment is a manual Raspberry Pi operation. Do not run SSH, SCP, or rsync to the RM2 from a developer Mac. Do not use the beamline or production RM2 until the spare-RM2 gates below pass.
+Production deployment is a manual Raspberry Pi operation. Do not run SSH, SCP, or rsync to the RM2 from a developer Mac. Do not use the beamline or production RM2 until the validation gates below pass.
 
 ## MVP scope
 
@@ -23,12 +23,12 @@ MVP does not require full visual fidelity for every RM2 feature. Unsupported ren
 Complete these gates in order:
 
 1. `Development readiness` workflow reports `READY` on `main`.
-2. Spare-RM2 raw-copy workflow succeeds on the Raspberry Pi self-hosted runner.
-3. Spare-RM2 run-local workflow succeeds and writes a clear run report.
-4. Spare-RM2 two-run workflow confirms unchanged documents are skipped on the second run.
-5. RPI dev systemd validation workflow succeeds.
-6. Dev systemd service is manually started on the Raspberry Pi and completes without touching the RM2.
-7. Dev timer is enabled only after a successful manual service run.
+2. Validation raw-copy workflow succeeds on the Raspberry Pi self-hosted runner.
+3. Validation run-local workflow succeeds and writes a clear run report.
+4. Validation two-run check confirms unchanged documents are skipped on the second run.
+5. Validation systemd workflow succeeds.
+6. Validation service is manually started on the Raspberry Pi and completes without touching the RM2.
+7. Validation timer is enabled only after a successful manual service run.
 8. Production config is created on the Raspberry Pi from `deploy/config/production.example.toml`.
 9. First production raw copy is run manually on the Raspberry Pi using read-only pull commands.
 10. First production `run-local` is run manually and the report is reviewed.
